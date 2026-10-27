@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>EdifierTray</AssemblyName>
+    <RootNamespace>EdifierTray</RootNamespace>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TieredPGO>true</TieredPGO>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- 不收尾端裁剪：WPF 與 WinForms 不支援 -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WinForms 的隱含 using 會讓 Application、Color、RadioButton 等名稱與 WPF 衝突，需要的檔案自己明確引用 -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Using Include="System.IO" />  <!-- UseWPF 會移除它的隱含 using -->
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <Resource Include="Assets\app.ico" />
+    <!-- 字串表與機種目錄與 Python 版共用同一份檔案（src/edifier_reverse/），兩邊不會各自漂移 -->
+    <EmbeddedResource Include="..\edifier_reverse\strings.json" LogicalName="strings.json" />
+    <EmbeddedResource Include="..\edifier_reverse\catalog.json" LogicalName="catalog.json" />
+  </ItemGroup>
+
+</Project>
+
+
+

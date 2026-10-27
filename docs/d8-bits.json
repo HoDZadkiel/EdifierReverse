@@ -1,0 +1,468 @@
+{
+ "0": {
+  "bean": "B0Bean",
+  "fields": [
+   {
+    "field": "isTWS",
+    "bit": 7
+   },
+   {
+    "field": "isPeer",
+    "bit": 6
+   },
+   {
+    "field": "isRChannel",
+    "bit": 5
+   },
+   {
+    "raw": "int i2 = i & 15;"
+   },
+   {
+    "raw": "this.ancValue = i2;"
+   },
+   {
+    "raw": "this.isSupportANC = i2 > 0;"
+   }
+  ]
+ },
+ "2": {
+  "plain": "b2IsSupportQueryName"
+ },
+ "4": {
+  "plain": "b4IsSupportQueryMac"
+ },
+ "5": {
+  "plain": "b5IsSupportQueryDeviceVersion"
+ },
+ "6": {
+  "plain": "b6IsSupportDisconnectA2dp"
+ },
+ "7": {
+  "plain": "b7IsSupportRepair"
+ },
+ "8": {
+  "plain": "b8IsSupportAutoShutdownWithoutAudioInput"
+ },
+ "10": {
+  "plain": "b10IsSupportDeviceOff"
+ },
+ "11": {
+  "plain": "b11IsSupportShowManual"
+ },
+ "12": {
+  "bean": "B12Bean",
+  "fields": [
+   {
+    "field": "isSupportAndroidSppOTA",
+    "bit": 0
+   },
+   {
+    "field": "isSupportAndroidBleOTA",
+    "bit": 1
+   },
+   {
+    "field": "isSupportIOSSppOTA",
+    "bit": 2
+   },
+   {
+    "field": "isSupportIOSBleOTA",
+    "bit": 3
+   },
+   {
+    "field": "isSupportShareMe",
+    "bit": 4
+   },
+   {
+    "field": "isSupportTapReset",
+    "bit": 5
+   },
+   {
+    "field": "isSupportStepCount",
+    "bit": 6
+   },
+   {
+    "field": "isSupportVoiceSwitch",
+    "bit": 7
+   }
+  ]
+ },
+ "14": {
+  "plain": "b14Skin"
+ },
+ "15": {
+  "bean": "B15Bean",
+  "fields": [
+   {
+    "field": "isSupportOnShake",
+    "bit": 0
+   },
+   {
+    "field": "isSupportOffShake",
+    "bit": 1
+   },
+   {
+    "field": "isSupportCallShake",
+    "bit": 2
+   },
+   {
+    "field": "isSupportWXShake",
+    "bit": 3
+   },
+   {
+    "field": "isSupportShake",
+    "bit": 7
+   }
+  ]
+ },
+ "16": {
+  "plain": "b16Tap"
+ },
+ "17": {
+  "bean": "B17Bean",
+  "fields": [
+   {
+    "field": "isSupportLEDSettings",
+    "bit": 0
+   },
+   {
+    "field": "isSupportBeepSwitchSettings",
+    "bit": 1
+   },
+   {
+    "field": "isSupportInEarDetectionSettings",
+    "bit": 2
+   },
+   {
+    "field": "isSupportTapSensitiveSettings",
+    "bit": 3
+   },
+   {
+    "field": "isSupportBeepVolumeSettings",
+    "bit": 4
+   },
+   {
+    "field": "isSupportDeviceResetSettings",
+    "bit": 5
+   },
+   {
+    "field": "isSupportGameMode",
+    "bit": 6
+   },
+   {
+    "field": "isSupportShowBoxBattery",
+    "bit": 7
+   }
+  ]
+ },
+ "18": {
+  "bean": "B18Bean",
+  "fields": [
+   {
+    "field": "isSupportWearingFitDetection",
+    "bit": 0
+   },
+   {
+    "field": "isSupportLHDC",
+    "bit": 1
+   },
+   {
+    "field": "isSupportLDAC",
+    "bit": 2
+   },
+   {
+    "field": "isSupportEarmuffsSwitch",
+    "bit": 3
+   },
+   {
+    "field": "isSupportWindNoiseSettings",
+    "bit": 4
+   },
+   {
+    "field": "isSupportDeviceLeakDetection",
+    "bit": 5
+   },
+   {
+    "field": "isSupportClearHeadphonePairingRecord",
+    "bit": 6
+   },
+   {
+    "field": "isSupportLightColorSettings",
+    "bit": 7
+   }
+  ]
+ },
+ "19": {
+  "bean": "B19Bean",
+  "fields": [
+   {
+    "field": "isSupportInputSourceSettings",
+    "bit": 0
+   },
+   {
+    "field": "isSupportVolumeSettings",
+    "bit": 1
+   },
+   {
+    "field": "isSupportDragonSound",
+    "bit": 2
+   },
+   {
+    "field": "isSupportAmbientLightTimingOffSettings",
+    "bit": 3
+   },
+   {
+    "raw": "int i2 = i >> 4;"
+   },
+   {
+    "raw": "this.isSupportShowMusicInfo = (i2 & 1) != 1 || i2 == -1;"
+   },
+   {
+    "field": "isSupportPressure",
+    "bit": 5
+   },
+   {
+    "field": "isSupportTouch",
+    "bit": 6
+   },
+   {
+    "field": "isSupportAmbientLight",
+    "bit": 7
+   }
+  ]
+ },
+ "20": {
+  "bean": "B20Bean",
+  "fields": [
+   {
+    "field": "isSupportSoundSpace",
+    "bit": 0
+   },
+   {
+    "field": "isSupportPromptToneSettings",
+    "bit": 1
+   },
+   {
+    "field": "isSupportHiRes",
+    "bit": 2
+   },
+   {
+    "field": "isSupportBtn",
+    "bit": 3
+   },
+   {
+    "field": "isSupportHearingProtection",
+    "bit": 4
+   },
+   {
+    "field": "isSupportTimeCalibration",
+    "bit": 5
+   },
+   {
+    "field": "isSupportRecovery",
+    "bit": 6
+   },
+   {
+    "field": "isSupportOnDragTwo",
+    "bit": 7
+   }
+  ]
+ },
+ "21": {
+  "bean": "B21Bean",
+  "fields": [
+   {
+    "field": "isSupportTimeCalibration",
+    "bit": 0
+   },
+   {
+    "field": "isSupportFastCharge",
+    "bit": 1
+   },
+   {
+    "field": "isSupportDenoiseMode",
+    "bit": 2
+   },
+   {
+    "field": "isSupportStudy",
+    "bit": 3
+   },
+   {
+    "field": "isSupportSmartLight",
+    "bit": 4
+   },
+   {
+    "field": "isBeepSet",
+    "bit": 5
+   },
+   {
+    "field": "isDataUpload",
+    "bit": 6
+   },
+   {
+    "field": "isNightRunLight",
+    "bit": 7
+   }
+  ]
+ },
+ "22": {
+  "bean": "B22Bean",
+  "fields": [
+   {
+    "field": "isSupportHdAudioCodec",
+    "bit": 0
+   },
+   {
+    "field": "isSupportSoundPickupLight",
+    "bit": 1
+   },
+   {
+    "field": "isSupportSoundRecord",
+    "bit": 2
+   },
+   {
+    "field": "isSupportQQUltra",
+    "bit": 3
+   },
+   {
+    "field": "isSupportBESDFUUpdate",
+    "bit": 4
+   },
+   {
+    "field": "isSupportHealthyTip",
+    "bit": 5
+   },
+   {
+    "field": "isSupportBluetoothPairRecord",
+    "bit": 6
+   },
+   {
+    "field": "isSupportUltraAudioRes",
+    "bit": 7
+   }
+  ]
+ },
+ "23": {
+  "bean": "B23Bean",
+  "fields": [
+   {
+    "field": "isSupportSavingMode",
+    "bit": 0
+   },
+   {
+    "field": "isSupportMic",
+    "bit": 1
+   },
+   {
+    "field": "isSupportTWSSpeaker",
+    "bit": 2
+   },
+   {
+    "field": "isSupportHeartRateCheck",
+    "bit": 3
+   },
+   {
+    "field": "isSupportLineHiRes",
+    "bit": 4
+   },
+   {
+    "field": "isQmxjc",
+    "bit": 5
+   },
+   {
+    "field": "isLanSwitch",
+    "bit": 6
+   },
+   {
+    "field": "isSupportSoundChannelSetting",
+    "bit": 7
+   }
+  ]
+ },
+ "24": {
+  "plain": "b24Lan"
+ },
+ "25": {
+  "bean": "B25Bean",
+  "fields": [
+   {
+    "field": "isSupportDongle",
+    "bit": 0
+   },
+   {
+    "field": "isSupportBassSetting",
+    "bit": 1
+   },
+   {
+    "field": "isSupportHeadsetState",
+    "bit": 2
+   },
+   {
+    "field": "isSupportBloodOxygenCheck",
+    "bit": 3
+   },
+   {
+    "field": "isEQTips",
+    "bit": 4
+   },
+   {
+    "field": "isSupportText",
+    "bit": 5
+   },
+   {
+    "field": "isSupportSmartNoTakeOff",
+    "bit": 6
+   }
+  ]
+ },
+ "26": {
+  "bean": "B26Bean",
+  "fields": [
+   {
+    "field": "isSupportHWARes",
+    "bit": 0
+   },
+   {
+    "field": "isSupportTranslate",
+    "bit": 1
+   },
+   {
+    "field": "isSupportBleOfBox",
+    "bit": 2
+   },
+   {
+    "field": "isSupportTimeCalibration",
+    "bit": 3
+   },
+   {
+    "field": "isSupportHeadsetRecording",
+    "bit": 4
+   },
+   {
+    "field": "isSupportPowerOnVolMemory",
+    "bit": 5
+   }
+  ]
+ },
+ "28": {
+  "bean": "B28Bean",
+  "fields": [
+   {
+    "field": "isSupportBassOut",
+    "bit": 4
+   },
+   {
+    "field": "isSupportDeviceBlocklist",
+    "bit": 1
+   }
+  ]
+ },
+ "29": {
+  "bean": "B29Bean",
+  "fields": [
+   {
+    "field": "isSupportF2",
+    "bit": 6
+   }
+  ]
+ }
+}

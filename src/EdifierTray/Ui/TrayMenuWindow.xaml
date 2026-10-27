@@ -1,0 +1,20 @@
+<Window x:Class="EdifierTray.Ui.TrayMenuWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="EdifierTray 選單" Width="272" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        Background="Transparent" UseLayoutRounding="True" SnapsToDevicePixels="True"
+        FontFamily="{DynamicResource UiFont}" TextOptions.TextFormattingMode="Ideal"
+        ShowActivated="True" Visibility="Hidden" Opacity="0">
+  <shell:WindowChrome.WindowChrome>
+    <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="0" GlassFrameThickness="-1"
+                        CornerRadius="8" UseAeroCaptionButtons="False"/>
+  </shell:WindowChrome.WindowChrome>
+  <Window.RenderTransform><TranslateTransform x:Name="Slide" Y="0"/></Window.RenderTransform>
+
+  <Border x:Name="Root" Background="{DynamicResource BgBrush}" BorderBrush="{DynamicResource BorderBrush2}"
+          BorderThickness="1" Padding="4">
+    <StackPanel x:Name="ItemsHost"/>
+  </Border>
+</Window>

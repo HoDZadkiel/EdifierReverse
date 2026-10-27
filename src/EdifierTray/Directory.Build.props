@@ -1,0 +1,8 @@
+<Project>
+  <!-- 設環境變數 EDIFIER_BUILD_ROOT（例如 C:\Work\edifier-tray-build）可把 bin/obj 放到 Nextcloud 外，
+       避免同步數千個編譯產物；沒設就用專案目錄底下的預設位置。與 Python 的 UV_PROJECT_ENVIRONMENT 同理。 -->
+  <PropertyGroup Condition="'$(EDIFIER_BUILD_ROOT)' != ''">
+    <BaseOutputPath>$(EDIFIER_BUILD_ROOT)\$(MSBuildProjectName)\bin\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(EDIFIER_BUILD_ROOT)\$(MSBuildProjectName)\obj\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

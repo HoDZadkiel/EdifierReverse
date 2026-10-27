@@ -1,0 +1,302 @@
+{
+ "1": {
+  "1": "NoiseCancellationOff",
+  "2": "NoiseCancellation",
+  "3": "AmbientSound"
+ },
+ "2": {
+  "1": "AmbientSoundOff",
+  "2": "AmbientSound"
+ },
+ "3": {
+  "1": "NoiseCancellationOff",
+  "2": "NoiseCancellation",
+  "3": "AdjustableAmbientSound"
+ },
+ "4": {
+  "1": "Transparency",
+  "2": "Close"
+ },
+ "5": {
+  "1": "NoiseCancellationOff",
+  "2": "NoiseCancellationHigh",
+  "3": "NoiseCancellationMedium",
+  "4": "AdjustableAmbientSound"
+ },
+ "6": {
+  "1": "Standard",
+  "2": "NoiseCancellationHigh",
+  "3": "NoiseCancellationMedium",
+  "4": "AdjustableAmbientSound"
+ },
+ "7": {
+  "1": "NoiseCancellationOff",
+  "2": "NoiseCancellationOn"
+ },
+ "8": {
+  "1": "Standard",
+  "2": "NoiseCancellationHigh",
+  "3": "NoiseCancellationMedium",
+  "4": "AmbientSound",
+  "5": "AdjustableVoiceEnhancement",
+  "6": "WindReduction"
+ },
+ "9": {
+  "1": "Standard",
+  "2": "NoiseCancellation"
+ },
+ "10": {
+  "1": "Standard",
+  "2": "NoiseCancellationHigh",
+  "3": "NoiseCancellationMedium",
+  "4": "AmbientSound",
+  "5": "WindReduction"
+ },
+ "11": {
+  "1": "Standard",
+  "2": "NoiseCancellationMedium"
+ },
+ "12": {
+  "1": "NoiseCancellationOff",
+  "2": "NoiseCancellation",
+  "3": "AdjustableAmbientSound"
+ },
+ "13": {
+  "1": "Standard",
+  "2": "NoiseCancellation",
+  "3": "AdjustableAmbientSound",
+  "4": "VoiceEnhancement"
+ },
+ "14": {
+  "1": "NoiseCancellationOff",
+  "2": "AdjustableVoiceEnhancement",
+  "3": "NoiseCancellationMedium",
+  "4": "NoiseCancellationHigh",
+  "5": "NoiseCancellationAdaptive"
+ },
+ "15": {
+  "1": "NoiseCancellationHighMode",
+  "2": "NoiseCancellationMediumMode",
+  "3": "AdjustableAmbientSound",
+  "4": "StandardMode",
+  "5": "WindReductionMode"
+ },
+ "16": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationMedium",
+  "3": "WindReduction",
+  "4": "AdjustableAmbientSound",
+  "5": "NoiseCancellationOff"
+ },
+ "17": {
+  "1": "NoiseCancellationAdaptive",
+  "2": "AdjustableAmbientSound",
+  "3": "NoiseCancellationOff"
+ },
+ "18": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationMedium",
+  "3": "AdjustableAmbientSound",
+  "4": "NoiseCancellationOff"
+ },
+ "19": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationMedium",
+  "3": "NoiseCancellationLow",
+  "4": "AmbientSound",
+  "5": "WindReduction",
+  "6": "NoiseCancellationOff"
+ },
+ "20": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationBroad",
+  "3": "AdjustableAmbientSound",
+  "4": "NoiseCancellationOff"
+ },
+ "21": {
+  "1": "NoiseCancellationMedium",
+  "2": "AdjustableAmbientSound",
+  "3": "WindReduction"
+ },
+ "22": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationBroad",
+  "3": "WindReduction",
+  "4": "AdjustableAmbientSound",
+  "5": "NoiseCancellationOff"
+ },
+ "23": {
+  "1": "NoiseCancellationOn",
+  "2": "AdjustableAmbientSound",
+  "3": "NoiseCancellationOff"
+ },
+ "24": {
+  "1": "NoiseCancellation",
+  "2": "AdjustableAmbientSound",
+  "3": "WindReduction"
+ },
+ "25": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationMedium",
+  "3": "NoiseCancellationAdaptive",
+  "4": "WindReduction",
+  "5": "AdjustableAmbientSound",
+  "6": "NoiseCancellationOff"
+ },
+ "26": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationLow",
+  "3": "WindReduction",
+  "4": "AdjustableAmbientSound",
+  "5": "NoiseCancellationOff"
+ },
+ "27": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationMedium",
+  "3": "NoiseCancellationBroad",
+  "4": "WindReduction",
+  "5": "AdjustableAmbientSound",
+  "6": "NoiseCancellationOff"
+ },
+ "28": {
+  "1": "NoiseCancellation",
+  "2": "AdjustableAmbientSound",
+  "3": "NoiseCancellationOff"
+ },
+ "29": {
+  "1": "NoiseCancellationAdaptive",
+  "2": "NoiseCancellationHigh",
+  "3": "NoiseCancellationMedium",
+  "4": "AmbientSound",
+  "5": "WindReduction",
+  "6": "NoiseCancellationOff"
+ },
+ "31": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationMedium",
+  "3": "NoiseCancellationLow",
+  "4": "AdjustableAmbientSound",
+  "5": "WindReduction",
+  "6": "NoiseCancellationOff"
+ },
+ "32": {
+  "1": "NoiseCancellationAdaptive",
+  "2": "NoiseCancellationHigh",
+  "3": "NoiseCancellationMedium",
+  "4": "AmbientSound",
+  "5": "WindReduction",
+  "6": "NoiseCancellationOff"
+ },
+ "33": {
+  "1": "NoiseCancellationLow",
+  "2": "AmbientSound"
+ },
+ "34": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationMedium",
+  "3": "WindReduction",
+  "4": "AmbientSound",
+  "5": "NoiseCancellationOff"
+ },
+ "35": {
+  "1": "NoiseCancellation",
+  "2": "AmbientSound"
+ },
+ "36": {
+  "1": "NoiseCancellationAdaptive",
+  "2": "NoiseCancellation",
+  "3": "AmbientSound",
+  "4": "WindReduction",
+  "5": "NoiseCancellationOff"
+ },
+ "37": {
+  "1": "NoiseCancellationLow",
+  "2": "NoiseCancellationOff"
+ },
+ "38": {
+  "1": "NoiseCancellation",
+  "2": "NoiseCancellationOff"
+ },
+ "39": {
+  "1": "NoiseCancellationAdaptive",
+  "2": "NoiseCancellationOff"
+ },
+ "40": {
+  "1": "NoiseCancellationOn",
+  "2": "AmbientSound",
+  "3": "NoiseCancellationOff"
+ },
+ "41": {
+  "1": "NoiseCancellationAdaptive",
+  "2": "NoiseCancellationMedium",
+  "3": "AmbientSound",
+  "4": "WindReduction",
+  "5": "NoiseCancellationOff"
+ },
+ "42": {
+  "1": "NoiseCancellationMedium",
+  "2": "NoiseCancellationOff"
+ },
+ "43": {
+  "1": "NoiseCancellation",
+  "2": "AmbientSound",
+  "3": "WindReduction",
+  "4": "NoiseCancellationOff"
+ },
+ "44": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationMedium",
+  "3": "WindReduction",
+  "4": "AmbientSound",
+  "5": "NoiseCancellationOff"
+ },
+ "45": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationMedium",
+  "3": "NoiseCancellationAdaptive",
+  "4": "AmbientSound",
+  "5": "NoiseCancellationOff"
+ },
+ "46": {
+  "1": "NoiseCancellationAdaptive",
+  "2": "NoiseCancellationHigh",
+  "3": "NoiseCancellationMedium",
+  "4": "WindReduction",
+  "5": "AmbientSound",
+  "6": "NoiseCancellationOff"
+ },
+ "47": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationMedium",
+  "3": "WindReduction",
+  "4": "AmbientSound",
+  "5": "NoiseCancellationOff"
+ },
+ "48": {
+  "1": "NoiseCancellationAdaptive",
+  "2": "NoiseCancellationHigh",
+  "3": "NoiseCancellationMedium",
+  "4": "WindReduction",
+  "5": "AmbientSound",
+  "6": "NoiseCancellationOff"
+ },
+ "49": {
+  "1": "NoiseCancellation",
+  "2": "NoiseCancellationAdaptive",
+  "3": "AmbientSound",
+  "4": "NoiseCancellationOff"
+ },
+ "50": {
+  "1": "NoiseCancellation",
+  "2": "NoiseCancellationAdaptive",
+  "3": "AmbientSound",
+  "4": "NoiseCancellationOff"
+ },
+ "51": {
+  "1": "NoiseCancellationHigh",
+  "2": "NoiseCancellationMedium",
+  "3": "WindReduction",
+  "4": "AmbientSound",
+  "5": "NoiseCancellationOff"
+ }
+}

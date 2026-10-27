@@ -1,0 +1,71 @@
+<Window x:Class="EdifierTray.Ui.FlyoutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="EdifierTray" Width="340" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        Background="Transparent" UseLayoutRounding="True" SnapsToDevicePixels="True"
+        FontFamily="{DynamicResource UiFont}" TextOptions.TextFormattingMode="Ideal"
+        ShowActivated="True" Visibility="Hidden" Opacity="0">
+  <shell:WindowChrome.WindowChrome>
+    <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="0" GlassFrameThickness="-1"
+                        CornerRadius="8" UseAeroCaptionButtons="False"/>
+  </shell:WindowChrome.WindowChrome>
+  <Window.RenderTransform><TranslateTransform x:Name="Slide" Y="0"/></Window.RenderTransform>
+
+  <Border x:Name="Root" Background="{DynamicResource BgBrush}" BorderBrush="{DynamicResource BorderBrush2}"
+          BorderThickness="1" Padding="16">
+    <StackPanel>
+      <!-- 標頭：logo、名稱與狀態、電量 -->
+      <Grid Margin="0,0,0,10">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <Image x:Name="LogoImage" Width="48" Height="48" RenderOptions.BitmapScalingMode="HighQuality"/>
+        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+          <TextBlock x:Name="NameText" Text="ES850NB" FontSize="15" FontWeight="SemiBold"
+                     Foreground="{DynamicResource TextBrush}"/>
+          <TextBlock x:Name="StatusText" Text="連線中…" FontSize="12" Foreground="{DynamicResource SubBrush}"
+                     TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+        <TextBlock x:Name="BatteryText" Grid.Column="2" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"
+                   Foreground="{DynamicResource TextBrush}"/>
+      </Grid>
+
+      <TextBlock Text="{DynamicResource T_p_anc}" FontSize="12" Foreground="{DynamicResource SubBrush}" Margin="0,4,0,6"/>
+      <UniformGrid Columns="3" Margin="0,0,-8,0">
+        <RadioButton x:Name="Mode1" Content="{DynamicResource T_anc_s_1}" Style="{StaticResource ModeTile}" GroupName="anc" Tag="1"/>
+        <RadioButton x:Name="Mode2" Content="{DynamicResource T_anc_s_2}" Style="{StaticResource ModeTile}" GroupName="anc" Tag="2"/>
+        <RadioButton x:Name="Mode3" Content="{DynamicResource T_anc_s_3}" Style="{StaticResource ModeTile}" GroupName="anc" Tag="3"/>
+        <RadioButton x:Name="Mode4" Content="{DynamicResource T_anc_s_4}" Style="{StaticResource ModeTile}" GroupName="anc" Tag="4"/>
+        <RadioButton x:Name="Mode5" Content="{DynamicResource T_anc_s_5}" Style="{StaticResource ModeTile}" GroupName="anc" Tag="5"/>
+      </UniformGrid>
+
+      <Grid Margin="0,6,0,0">
+        <TextBlock x:Name="AmbientTitle" Text="{DynamicResource T_p_ambient}" FontSize="12" Foreground="{DynamicResource SubBrush}"/>
+        <TextBlock x:Name="AmbientValue" FontSize="12" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+      </Grid>
+      <Slider x:Name="AmbientSlider" Style="{StaticResource FluentSlider}" Minimum="1" Maximum="12"
+              SmallChange="1" LargeChange="1" TickFrequency="1" IsSnapToTickEnabled="True" Value="6"/>
+
+      <TextBlock Text="{DynamicResource T_p_volume}" FontSize="12" Foreground="{DynamicResource SubBrush}" Margin="0,10,0,0"/>
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="46"/>
+        </Grid.ColumnDefinitions>
+        <Button x:Name="MuteButton" Style="{StaticResource IconButton}" Content="&#xE767;"/>
+        <Slider x:Name="VolumeSlider" Grid.Column="1" Style="{StaticResource FluentSlider}" Minimum="0" Maximum="100"
+                SmallChange="1" LargeChange="5" Margin="4,0,0,0" IsSnapToTickEnabled="True" TickFrequency="1"/>
+        <TextBlock x:Name="VolumeValue" Grid.Column="2" FontSize="12" HorizontalAlignment="Right"
+                   VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}"/>
+      </Grid>
+
+      <DockPanel Margin="0,10,0,0">
+        <TextBlock x:Name="QuitLink" DockPanel.Dock="Right" Text="{DynamicResource T_p_quit}" Style="{StaticResource LinkText}"/>
+        <TextBlock x:Name="ReconnectLink" DockPanel.Dock="Right" Text="{DynamicResource T_p_reconnect}" Style="{StaticResource LinkText}"/>
+        <TextBlock x:Name="MessageText" FontSize="12" Foreground="{DynamicResource ErrorBrush}"
+                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+      </DockPanel>
+    </StackPanel>
+  </Border>
+</Window>

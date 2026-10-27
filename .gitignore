@@ -1,0 +1,47 @@
+# 機密
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.tox/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# .NET
+bin/
+obj/
+TestResults/
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 編輯器
+.vscode/
+.idea/
+*.swp
+
+# reverse engineering materials
+docs/apk/
+docs/captures/
+*.apk
+*.apkm
+*.btsnoop
+*.cfa

@@ -1,0 +1,183 @@
+﻿<Application x:Class="EdifierTray.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+  <Application.Resources>
+    <!-- UiFont（Segoe UI Variable 加各語言的 Windows 11 介面字體）由 Strings.ApplyToResources 依語言寫入 -->
+    <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <!-- 磚塊按鈕（降噪模式）：選中時填系統強調色 -->
+    <Style x:Key="ModeTile" TargetType="RadioButton">
+      <Setter Property="Height" Value="40"/>
+      <Setter Property="Margin" Value="0,0,8,8"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="Bd" CornerRadius="6" BorderThickness="1"
+                    Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush2}">
+              <TextBlock x:Name="Tx" Text="{TemplateBinding Content}" HorizontalAlignment="Center"
+                         VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}"/>
+            </Border>
+            <!-- 觸發器越後面優先權越高：停用 < 滑過（僅啟用時）< 選中。
+                 所以冷卻期（停用）時，目前模式的磚塊仍顯示強調色，只是不能點 -->
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Tx" Property="Foreground" Value="{DynamicResource DisabledBrush}"/>
+              </Trigger>
+              <MultiTrigger>
+                <MultiTrigger.Conditions>
+                  <Condition Property="IsMouseOver" Value="True"/>
+                  <Condition Property="IsEnabled" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
+              </MultiTrigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter TargetName="Tx" Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Fluent 拖曳條：細軌道、強調色已填段、外白內色的圓形把手 -->
+    <Style x:Key="SliderFill" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RepeatButton">
+            <Grid Background="Transparent">
+              <Border x:Name="F" Height="4" CornerRadius="2" Margin="10,0,0,0" VerticalAlignment="Center"
+                      Background="{DynamicResource AccentBrush}"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType=Slider}}" Value="False">
+                <Setter TargetName="F" Property="Background" Value="{DynamicResource DisabledBrush}"/>
+              </DataTrigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="SliderRest" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="SliderThumb" TargetType="Thumb">
+      <Setter Property="Width" Value="20"/>
+      <Setter Property="Height" Value="20"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Thumb">
+            <Grid Background="Transparent">
+              <Ellipse Fill="{DynamicResource SurfaceBrush}" Stroke="{DynamicResource BorderBrush2}" StrokeThickness="1"/>
+              <Ellipse x:Name="Dot" Width="12" Height="12" Fill="{DynamicResource AccentBrush}"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Dot" Property="Width" Value="14"/><Setter TargetName="Dot" Property="Height" Value="14"/>
+              </Trigger>
+              <Trigger Property="IsDragging" Value="True">
+                <Setter TargetName="Dot" Property="Width" Value="10"/><Setter TargetName="Dot" Property="Height" Value="10"/>
+              </Trigger>
+              <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType=Slider}}" Value="False">
+                <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource DisabledBrush}"/>
+              </DataTrigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="FluentSlider" TargetType="Slider">
+      <Setter Property="Height" Value="28"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="IsMoveToPointEnabled" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Slider">
+            <Grid Background="Transparent" SnapsToDevicePixels="True">
+              <Border Height="4" CornerRadius="2" Margin="10,0" VerticalAlignment="Center"
+                      Background="{DynamicResource TrackBrush}"/>
+              <Track x:Name="PART_Track">
+                <Track.DecreaseRepeatButton>
+                  <RepeatButton Command="Slider.DecreaseLarge" Style="{StaticResource SliderFill}"/>
+                </Track.DecreaseRepeatButton>
+                <Track.Thumb><Thumb Style="{StaticResource SliderThumb}"/></Track.Thumb>
+                <Track.IncreaseRepeatButton>
+                  <RepeatButton Command="Slider.IncreaseLarge" Style="{StaticResource SliderRest}"/>
+                </Track.IncreaseRepeatButton>
+              </Track>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- 圖示按鈕（靜音）與文字連結 -->
+    <Style x:Key="IconButton" TargetType="Button">
+      <Setter Property="Width" Value="32"/>
+      <Setter Property="Height" Value="32"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" CornerRadius="6" Background="Transparent">
+              <TextBlock Text="{TemplateBinding Content}" FontFamily="{StaticResource IconFont}" FontSize="16"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- 右鍵選單的列：滑過時淡淡的底色，停用時文字變灰 -->
+    <Style x:Key="MenuRow" TargetType="Button">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Margin" Value="0,1"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" CornerRadius="4" Background="Transparent">
+              <ContentPresenter x:Name="Cp"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="{DynamicResource DisabledBrush}"/>
+                <Setter Property="Cursor" Value="Arrow"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="LinkText" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Margin" Value="12,0,0,0"/>
+    </Style>
+  </Application.Resources>
+</Application>
+

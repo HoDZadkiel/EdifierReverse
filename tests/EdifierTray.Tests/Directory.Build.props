@@ -1,0 +1,7 @@
+<Project>
+  <!-- 與 src/EdifierTray 相同：EDIFIER_BUILD_ROOT 有設時，把 bin/obj 放到 Nextcloud 外 -->
+  <PropertyGroup Condition="'$(EDIFIER_BUILD_ROOT)' != ''">
+    <BaseOutputPath>$(EDIFIER_BUILD_ROOT)\$(MSBuildProjectName)\bin\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(EDIFIER_BUILD_ROOT)\$(MSBuildProjectName)\obj\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>
