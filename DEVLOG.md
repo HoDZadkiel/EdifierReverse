@@ -567,3 +567,48 @@
 #### 待辦事項（TODO）
 - 這則 DEVLOG 與其後的變更尚未 commit／push（使用者尚未要求再次推送）
 - 開 CI（.github/workflows 目前空）；除 ES850NB 外的機種實機驗證
+
+### 直接運行與開機自動啟動研究（Changes）
+- README.md：新增〈直接運行與開機自動啟動（方案）〉一節（打包比較、自啟缺口、落地順序與驗證清單）；Roadmap 該項改寫
+- 沒有改任何程式碼；實測產物在專案外 `C:\Work\pub-fd`、`pub-sc`、`pyi`
+
+### 問題與解法（Problems & Solutions）
+- 實測：C# 單檔（framework-dependent）26.3 MB 可啟動；自含壓縮 68.8 MB + 5 個原生 DLL；PyInstaller onefile 22.4 MB 可啟動
+- 發現缺口：Python 版自啟指令在打包後會錯、Python 版無單例鎖、`is_enabled()` 沒看 `StartupApproved`（停用值 03 為推測）、C# 以 `dotnet x.dll` 執行時會寫成 dotnet.exe
+- 清理 `%TEMP%\_MEI*`（PyInstaller 被強制結束的殘留）的指令被權限分類器擋下，未重試；需使用者自行刪除或同意
+
+### 待辦事項（TODO）
+- 按 README 方案落地：frozen 判斷、Python 單例鎖、StartupApproved、建置腳本、重新開機實機驗證
+- 本次變更（README、DEVLOG）尚未 commit／push
+
+### 部署方案定案（Changes）
+- 決策：只主推 C# 版（只有它有單例鎖）；Python 版只保留 uv 啟動指令，不打包（不做 PyInstaller）
+- 新增 `scripts/install.ps1`、`scripts/install.cmd`：一鍵建置單檔 exe → 安裝到 `%LOCALAPPDATA%\EdifierTray` → 寫 HKCU Run（值名與 Autostart.cs 相同）→ 啟動；參數 -NoAutostart/-NoLaunch/-Uninstall/-InstallDir/-RunKey
+- README.md：快速開始改為 C# 一鍵安裝為主、Python 為 uv 驗證用；方案節改為〈部署與開機自動啟動〉；Roadmap、特色同步；CLAUDE.md scripts 說明加入 install
+
+### 問題與解法（Problems & Solutions）
+- 測試用獨立機碼的父層不存在，New-Item 失敗 → 加 -Force（僅在機碼不存在時才建）
+- install.ps1 含中文，PS 5.1 需 UTF-8 BOM；Edit 工具可能去掉 BOM，之後修改要重新確認
+- `%TEMP%` 下以萬用字元刪測試殘留被權限分類器擋下，未重試；殘留：`%TEMP%\edt_*`（第一次失敗測試）、`%TEMP%\_MEI*`，需使用者自行刪除
+
+### 待辦事項（TODO）
+- C# Autostart 補 StartupApproved 檢查與非單檔 exe 的防呆；重新開機實機驗證
+- 安裝腳本的「直接啟動」與「覆蓋執行中版本」未測
+- 本次變更尚未 commit／push
+
+### 安裝檔與開源準備（Changes）
+- 新增 `scripts/build-installer.ps1`、`scripts/installer/EdifierTray.iss`：自含發佈 + Inno Setup 6 → `EdifierTray-Setup-0.1.0.exe`（63.2 MB；免管理員；安裝到 %LOCALAPPDATA%\EdifierTray；可選自啟；開始功能表捷徑；AppMutex 對應單例鎖）。版本號取自 pyproject.toml。輸出預設在 %TEMP%\EdifierTray-installer
+- 新增 `docs/deployment.md`（部署方式、自啟設計、已知缺口）；README 改以 GitHub 讀者為主：快速開始、參與貢獻、授權與聲明；部署細節移到 docs/deployment.md
+- 移除公開檔案中 Nextcloud／專案外 venv 的個人情境：README、CLAUDE.md、docs/findings.md、tool-design.md、handoff-other-pc.md、兩個 Directory.Build.props、install.ps1 註解（DEVLOG 保留原樣）
+- 用 winget 安裝了 Inno Setup 6.7.3（使用者範圍）
+
+### 問題與解法（Problems & Solutions）
+- 實測：靜默安裝/啟動/解除安裝正常；安裝檔內 exe 已壓縮，Inno 無法再縮，63 MB（改不壓縮單檔交給 LZMA 可能更小，未試）
+- 「勾選自啟」的安裝路徑要寫真正的 HKCU Run，被權限分類器擋下，未測
+- Python 字串替換把 `\b` 寫成退格字元，已用 chr() 修正；以掃描控制字元確認文件乾淨
+- 開源前審查：歷史只有 2 個 commit，作者為 noreply 信箱；AES 金鑰值不在歷史；無 apk/captures/jsonl 被追蹤；HEAD 無真實裝置位址、無使用者名稱／個人信箱
+
+### 待辦事項（TODO）
+- 使用者確認後才把 GitHub 倉庫改為公開（尚未執行）；公開前注意 catalog.json／協定文件衍生自官方 App 的法律灰色地帶
+- docs/deployment.md 的 4 個缺口；重新開機實機驗證；安裝檔勾選自啟路徑的實測
+- 本次變更尚未 commit／push

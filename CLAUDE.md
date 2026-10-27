@@ -30,7 +30,7 @@ EdifierReverse/
 │   └── EdifierTray.Tests/      # C# 測試（xUnit）
 ├── docs/                       # 設計文件與研究結論（apk/、captures/ 不進版控）
 │   └── images/                 # 文件用圖（README 的截圖）
-├── scripts/                    # 解密產品表、產生常數表／目錄、抽取 ANC／D8 表
+├── scripts/                    # 一鍵安裝（install.cmd/.ps1）、Setup.exe 安裝檔（build-installer.ps1 + installer/）、解密產品表、產生常數表／目錄、抽取 ANC／D8 表
 ├── examples/                   # 可執行的使用範例（目前空）
 └── .github/workflows/          # CI 設定（目前空）
 ```
@@ -39,7 +39,7 @@ EdifierReverse/
 
 ## 開發約定
 
-- Python 環境：`$env:UV_PROJECT_ENVIRONMENT = "C:\Work\edifier-venv"` 後 `uv sync --extra tray`；C# 建置前設 `EDIFIER_BUILD_ROOT`（把 bin/obj 放專案外，避免被同步）
+- Python 環境（選用：把 venv 放專案目錄外）：`$env:UV_PROJECT_ENVIRONMENT = "C:\Work\edifier-venv"` 後 `uv sync --extra tray`；C# 建置前設 `EDIFIER_BUILD_ROOT`（選用：把 bin/obj 放專案目錄外，專案在雲端同步資料夾時用）
 - `commands.py`、`d8_flags.py`、`catalog.json` 由 `scripts/gen_*.py` 產生，不手改
 - **兩份協定實作要一致**：改封包、設定規則、字串、機種目錄時，Python 與 C# 都要改，並用同樣的測試向量守住
 - 字串一律走 `strings.json`（鍵名、四種語言、`{參數}` 都要齊，有測試檢查）；UI 文字不要寫死

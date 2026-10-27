@@ -21,33 +21,33 @@ Edifier 的進階功能（降噪、音量之外的設定等）只有手機 App �
 - **降噪與音量**：五種降噪模式、環境音強度拖曳條、音量拖曳條與靜音；連按切換時自動冷卻，不會卡住
 - **多國語言與外觀**：繁體中文、简体中文、English、日本語；日間／夜間／跟隨系統，即時切換
 - **自動辨識 Edifier 裝置**：依官方 App 的判定方式，從 102 個機種的目錄辨識附近的 Edifier 裝置；有多台時可在選單挑選
-- **兩種實作**：Python（輕量、好改）與 C#／WPF（原生質感、單一 exe），功能相同
+- **兩種實作**：C#／WPF（主推：原生質感、單一 exe、一鍵安裝、有單例鎖）與 Python（用 uv 啟動，供驗證與開發），功能相同
 
 ## 快速開始
 
 需要 Windows 10/11、藍牙，且耳機已在 Windows 配對並連上 A2DP（SPP 控制通道需要）。
 
-### Python 版
+### C# 版（主推）
 
-Python 環境用 [uv](https://docs.astral.sh/uv/) 管理。為避免數千個檔案被 Nextcloud 同步，虛擬環境放專案外：
+需要 [.NET 8 SDK](https://dotnet.microsoft.com/download)（`winget install Microsoft.DotNet.SDK.8`）。複製專案後擇一：
 
 ```powershell
-$env:UV_PROJECT_ENVIRONMENT = "C:\Work\edifier-venv"   # 每台電腦各自設定
+scripts\install.cmd            # 一鍵：建置 → 安裝到 %LOCALAPPDATA%\EdifierTray → 開機自動啟動 → 啟動
+scripts\build-installer.ps1    # 或產生 Setup.exe 安裝檔（另需 winget install JRSoftware.InnoSetup）
+```
+
+兩者都不需要系統管理員權限。`install.cmd` 可加 `-NoAutostart`、`-NoLaunch`、`-Uninstall`；開機自動啟動也能隨時從托盤右鍵選單開關。細節與實測狀況見 [docs/deployment.md](docs/deployment.md)。
+
+只想編譯：`dotnet build src/EdifierTray -c Release`。
+
+### Python 版（驗證與開發用）
+
+用 [uv](https://docs.astral.sh/uv/) 啟動。不打包、也沒有單例鎖，不建議長期常駐；用途是讓你驗證協定、改程式：
+
+```powershell
 uv sync --extra tray
 uv run edifier-reverse tray
 ```
-
-### C# 版
-
-需要 [.NET 8 SDK](https://dotnet.microsoft.com/download)（只執行已建好的 exe 則只需 .NET 8 桌面執行環境）：
-
-```powershell
-$env:EDIFIER_BUILD_ROOT = "C:\Work\edifier-tray-build"   # 建置輸出放專案外
-dotnet build src/EdifierTray -c Release
-& "$env:EDIFIER_BUILD_ROOT\EdifierTray\bin\Release\net8.0-windows10.0.19041.0\EdifierTray.exe"
-```
-
-單檔發佈：`dotnet publish src/EdifierTray -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o <輸出資料夾>`（約 25 MB）。
 
 ### 命令列
 
@@ -104,12 +104,23 @@ flowchart LR
 | 檔案 | 內容 |
 |------|------|
 | [docs/findings.md](docs/findings.md) | 研究結論總整理（從這裡開始看） |
+| [docs/deployment.md](docs/deployment.md) | 安裝檔、一鍵安裝、開機自動啟動與已知缺口 |
 | [docs/tool-design.md](docs/tool-design.md) | 托盤小工具設計、兩個版本的比較與實測 |
 | [docs/protocol-packet.md](docs/protocol-packet.md)、[protocol-commands.md](docs/protocol-commands.md)、[protocol-d8.md](docs/protocol-d8.md)、[protocol-uuids.md](docs/protocol-uuids.md) | 封包格式、指令 payload、功能旗標、UUID |
 | [docs/hq-audio-assessment.md](docs/hq-audio-assessment.md)、[docs/ldac-and-tool-plan.md](docs/ldac-and-tool-plan.md) | 高音質（LDAC／LHDC）評估與工具方案 |
 | [docs/handoff-other-pc.md](docs/handoff-other-pc.md) | 換電腦做實機驗證的步驟 |
 | [CLAUDE.md](CLAUDE.md) | 給 AI agent 的專案指示 |
 | [DEVLOG.md](DEVLOG.md) | 逐步開發紀錄 |
+
+## 參與貢獻
+
+最需要的是**其他機種的實機回報**。有 Edifier 耳機／喇叭的話：
+
+1. `uv run edifier-reverse devices` 看能否被辨識（只讀）。
+2. `uv run edifier-reverse status` 看能否連線並讀到電量、名稱（只讀）。
+3. 開 issue 附上機種與輸出。**請先遮掉輸出裡的藍牙位址。**
+
+原則：只送已在實機上驗證過的指令；韌體更新（OTA／DFU）指令在函式庫層封鎖，請勿嘗試繞過。協定結論只寫已驗證的事實，並標明推測。改封包、設定規則、字串、機種目錄時，Python 與 C# 兩邊都要改（詳見 [CLAUDE.md](CLAUDE.md)）。
 
 ## Roadmap
 
@@ -118,10 +129,11 @@ flowchart LR
 - [x] ES850NB 實機驗證（連線、查詢、降噪、EQ）
 - [x] 托盤小工具（Python 與 C# 兩版）：面板、右鍵選單、語言、外觀、多裝置
 - [ ] 真人長時間使用的回饋：常駐穩定性、耳機休眠後重連、手機 App 同時連線的衝突
-- [ ] 打包 Python 版（PyInstaller）與開機自動啟動的實機驗證
+- [x] 一鍵安裝腳本與 Setup.exe 安裝檔
+- [ ] 開機自動啟動的實機驗證（含重新開機）與其已知缺口，見 [docs/deployment.md](docs/deployment.md)
 - [ ] 其他機種的實機驗證；C# 版支援 BLE-only 機種（目前請用 Python 版）
 - [ ] 在 Android 開 HCI snoop log，錄下官方 App 操作的封包，與反編譯結果對照
 
-## 授權
+## 授權與聲明
 
-[MIT](LICENSE)。官方 APK、反編譯原始碼與 HCI 抓包（含裝置位址）不隨專案散布，見 `.gitignore`。
+程式碼以 [MIT](LICENSE) 授權。本專案為互通性目的的獨立研究：通訊協定由公開可取得的官方 App 分析而來，官方 APK、反編譯原始碼與 HCI 抓包（含裝置位址）**不隨專案散布**（見 `.gitignore`）。機種目錄 `catalog.json` 只含機種名稱、藍牙 UUID 與旗標。Edifier 及相關名稱屬其各自所有者，本專案與其無隸屬關係。

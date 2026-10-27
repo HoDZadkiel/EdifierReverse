@@ -41,7 +41,7 @@ cli.py 的 status / anc 子命令  ----^（同一個 DeviceService，不碰 GUI�
 |------|------|
 | ANC 切換不再跳確認視窗 | 點選單本身就是明確操作，且可立即切回；舊方案的「一律確認」只對不可逆指令保留（目前工具沒有這類指令） |
 | 只做模式表 group 16 | 其他群組只有靜態分析；未知 group 時 ANC 選單停用、只顯示狀態 |
-| 設定檔放 `%APPDATA%\edifier-reverse\config.json` | 內含裝置位址（MAC），不放專案目錄，避免被同步或 push |
+| 設定檔放 `%APPDATA%\edifier-reverse\config.json` | 內含裝置位址（MAC），不放專案目錄，避免被 push |
 | 工具不碰電腦端藍牙音訊驅動 | 不改善音質，LDAC 另案 |
 | 不使用未驗證的指令 | 工具能送的指令是固定清單：查詢類、`0xC1` |
 
@@ -92,7 +92,7 @@ cli.py 的 status / anc 子命令  ----^（同一個 DeviceService，不碰 GUI�
 建置與執行（C#）：
 
 ```powershell
-$env:EDIFIER_BUILD_ROOT = "C:\Work\edifier-tray-build"   # bin/obj 放 Nextcloud 外，與 Python 的 UV_PROJECT_ENVIRONMENT 同理
+$env:EDIFIER_BUILD_ROOT = "C:\Work\edifier-tray-build"   # bin/obj 放專案目錄外（選用）
 dotnet build src/EdifierTray -c Release
 dotnet test tests/EdifierTray.Tests -c Release
 # 單檔發佈：dotnet publish src/EdifierTray -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o <輸出資料夾>

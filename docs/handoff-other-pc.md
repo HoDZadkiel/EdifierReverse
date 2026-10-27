@@ -6,11 +6,11 @@
 
 - Windows，有可用的藍牙無線電（本機的 `Get-PnpDevice -Class Bluetooth` 要有狀態 OK 的項目；另一台電腦預期有）。
 - 已安裝 [uv](https://docs.astral.sh/uv/)。
-- 專案已經透過 Nextcloud 同步過去。注意：APK 在 `docs/apk/`，約 120 MB，會一起同步，不需要時可在那台電腦把它設為不同步。
+- 專案已複製到那台電腦。`docs/apk/`（官方 APK，約 120 MB）不進版控，換電腦探測用不到，不需要帶。
 
 ## 1. 準備環境
 
-把虛擬環境放在 Nextcloud 目錄外（避免同步數千個檔案）：
+虛擬環境可放在專案目錄外（選用，專案在雲端同步資料夾時建議）：
 
 ```powershell
 cd <專案路徑>
@@ -99,7 +99,7 @@ uv run edifier-reverse probe --model ES850NB
 ## 5. 帶回什麼
 
 1. 步驟 2～4 的完整終端輸出。
-2. `docs/captures/` 內的 `.jsonl`（已 gitignore，但會經 Nextcloud 同步回來；內含裝置 MAC，不要 push）。
+2. `docs/captures/` 內的 `.jsonl`（已 gitignore；內含裝置 MAC，不要 push）。
 3. 做 probe 的那台電腦的藍牙晶片／介面卡型號（評估電腦端能否送出 LDAC 時要用）。
 4. 觀察到的異常，例如：哪些查詢逾時、回應長度與預期不符、連線失敗訊息。
 

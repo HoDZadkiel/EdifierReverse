@@ -64,7 +64,7 @@
 | jadx 1.5.6 | `C:\Tools\jadx`（只在這台電腦，可重新下載） |
 | 反編譯輸出 | `C:\Work\edifier\out\sources`（29,543 個 java，344 個方法無法還原屬正常；只在這台電腦） |
 | 解出的資產 | `C:\Work\edifier\apk_x`、`C:\Work\edifier\products.json`（產品表解密結果，只在這台電腦） |
-| Python 環境 | uv；venv 在 `C:\Work\edifier-venv`（刻意放在 Nextcloud 外，避免同步數千個檔案） |
+| Python 環境 | uv；venv 在 `C:\Work\edifier-venv`（放在專案目錄外） |
 
 換電腦不需要 jadx 與反編譯輸出——所有需要的結論都已落在 `docs/` 與 `src/`。
 
