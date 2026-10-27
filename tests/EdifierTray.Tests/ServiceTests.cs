@@ -295,6 +295,34 @@ public class VolumeTests
         Assert.Contains("無法存取", ex.Message);
     }
 
+    [Fact] public void Falls_back_to_the_default_output_when_the_headphone_endpoint_is_missing()
+    {
+        var fallback = new Fake { Scalar = 0.3f };
+        var v = new VolumeControl("X", _ => throw new ServiceException("e.vol_endpoint", new { name = "X" }), () => fallback);
+        Assert.Equal(30, v.Get());
+        Assert.Equal(60, v.Set(60));
+        Assert.Equal(0.6f, fallback.Scalar, 3);  // 耳機沒連上時，音量按鈕調的是目前使用中的輸出
+    }
+
+    [Fact] public void Reset_picks_the_headphone_endpoint_again_once_it_appears()
+    {
+        var headphone = new Fake { Scalar = 0.8f };
+        bool present = false;
+        var v = new VolumeControl("X", _ => present ? headphone : throw new ServiceException("e.vol_endpoint", new { name = "X" }),
+                                  () => new Fake { Scalar = 0.1f });
+        Assert.Equal(10, v.Get());
+        present = true;
+        Assert.Equal(10, v.Get());  // 端點有快取，沒 Reset 就不會換
+        v.Reset();
+        Assert.Equal(80, v.Get());
+    }
+
+    [Fact] public void Without_a_fallback_a_missing_endpoint_still_fails()
+    {
+        var v = new VolumeControl("X", _ => throw new ServiceException("e.vol_endpoint", new { name = "X" }));
+        Assert.Throws<ServiceException>(() => v.Get());
+    }
+
     [Fact] public void Mute_roundtrip()
     {
         var ep = new Fake();

@@ -17,6 +17,7 @@ public sealed class VolumeControl
 {
     string _namePart;
     readonly Func<string, IEndpoint> _open;
+    readonly Func<IEndpoint>? _fallback;
     IEndpoint? _ep;
 
     sealed class NAudioEndpoint : IEndpoint
@@ -38,10 +39,33 @@ public sealed class VolumeControl
         throw new ServiceException("e.vol_endpoint", new { name = namePart });
     }
 
-    public VolumeControl(string namePart = "EDIFIER", Func<string, IEndpoint>? opener = null)
+    /// <summary>系統預設輸出裝置的音量端點。耳機沒連上時的備援，讓音量按鈕仍可調整目前使用中的輸出。</summary>
+    public static IEndpoint OpenDefaultEndpoint()
+    {
+        try
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            return new NAudioEndpoint(enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia));
+        }
+        catch (Exception) { throw new ServiceException("e.vol_access"); }
+    }
+
+    /// <summary>找不到耳機端點時改用 fallback（預設是系統預設輸出裝置；自訂 opener 時預設不備援）。</summary>
+    public VolumeControl(string namePart = "EDIFIER", Func<string, IEndpoint>? opener = null,
+                         Func<IEndpoint>? fallback = null)
     {
         _namePart = namePart;
         _open = opener ?? OpenEndpoint;
+        _fallback = fallback ?? (opener is null ? OpenDefaultEndpoint : null);
+    }
+
+    /// <summary>丟掉快取的端點。耳機連上或斷線時呼叫，讓下次操作重新挑耳機端點或備援端點。</summary>
+    public void Reset() => _ep = null;
+
+    IEndpoint Find()
+    {
+        try { return _open(_namePart); }
+        catch (ServiceException) when (_fallback is not null) { return _fallback(); }
     }
 
     /// <summary>換成另一台裝置的播放端點（名稱含 namePart）。多台 Edifier 裝置時，依目前連線裝置的名稱挑對的那一個。</summary>
@@ -56,7 +80,7 @@ public sealed class VolumeControl
     {
         for (int attempt = 0; ; attempt++)
         {
-            _ep ??= _open(_namePart);
+            _ep ??= Find();
             try { return fn(_ep); }
             catch (ServiceException) { throw; }
             catch (Exception) when (attempt == 0) { _ep = null; }  // 端點失效，重新尋找後重試

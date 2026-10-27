@@ -82,7 +82,11 @@ public sealed class TrayHost : IDisposable
             _wasConnected = false;
             if (Directory?.Current is { } cur) Directory.RememberName(cur.A2dp, s.Name);
         }
-        if (s.Connected && !_wasConnected) RefreshVolume();
+        if (s.Connected != _wasConnected)  // 連上／斷線時重選端點：連上用耳機端點，斷線改用備援的預設輸出
+        {
+            Volume.Reset();
+            RefreshVolume();
+        }
         _wasConnected = s.Connected;
         Render(s);
     }

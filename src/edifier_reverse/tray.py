@@ -189,7 +189,8 @@ class TrayApp:
             self._volume_target = state.name
             self.volume.set_target(state.name)  # 多台 Edifier 裝置時，調的是目前連線那一台的播放端點
             was = False
-        if state.connected and not was:
+        if state.connected != was:  # 連上／斷線時重選端點：連上用耳機端點，斷線改用備援的預設輸出
+            self.volume.reset()
             self.refresh_volume()
         if state.connected and state.name and self.directory is not None and self.directory.current() is not None:
             self.directory.remember_name(self.directory.current().a2dp, state.name)

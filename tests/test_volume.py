@@ -86,6 +86,33 @@ def test_persistent_failure_becomes_a_volume_error():
         VolumeControl("X", opener=lambda n: Stale()).get()
 
 
+def _missing(name):
+    raise VolumeError("找不到")
+
+
+def test_falls_back_to_the_default_output_when_the_headphone_endpoint_is_missing():
+    # 耳機沒連上時，音量按鈕調的是目前使用中的輸出
+    fb = FakeEndpoint(0.3)
+    c = VolumeControl("X", opener=_missing, fallback=lambda: fb)
+    assert c.get() == 30
+    assert c.set(60) == 60 and fb.scalar == 0.6
+
+
+def test_reset_picks_the_headphone_endpoint_again_once_it_appears():
+    headphone, present = FakeEndpoint(0.8), []
+    c = VolumeControl("X", opener=lambda n: headphone if present else _missing(n), fallback=lambda: FakeEndpoint(0.1))
+    assert c.get() == 10
+    present.append(1)
+    assert c.get() == 10  # 端點有快取，沒 reset 就不會換
+    c.reset()
+    assert c.get() == 80
+
+
+def test_custom_opener_without_fallback_still_fails():
+    with pytest.raises(VolumeError):
+        VolumeControl("X", opener=_missing).get()
+
+
 def test_missing_device_is_a_volume_error():
     def opener(name):
         raise VolumeError("找不到")

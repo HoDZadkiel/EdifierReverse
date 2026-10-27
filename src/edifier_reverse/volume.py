@@ -14,9 +14,7 @@ class VolumeError(Exception):
     pass
 
 
-def _open_endpoint(name_part: str):
-    """找出名稱含 name_part 的作用中「播放」端點（id 以 {0.0.0 開頭；{0.0.1 是錄音／麥克風），
-    回傳 IAudioEndpointVolume。排除 Hands-Free（通話用）端點。每次呼叫都在目前執行緒重新取得。"""
+def _audio_utilities():
     try:
         import comtypes
         from pycaw.pycaw import AudioUtilities
@@ -26,6 +24,23 @@ def _open_endpoint(name_part: str):
         comtypes.CoInitialize()
     except OSError:
         pass  # 此執行緒已初始化
+    return AudioUtilities
+
+
+def _open_default_endpoint():
+    """系統預設輸出裝置的音量端點。耳機沒連上時的備援，讓音量按鈕仍可調整目前使用中的輸出。"""
+    try:
+        return _audio_utilities().GetSpeakers().EndpointVolume
+    except VolumeError:
+        raise
+    except Exception as e:
+        raise VolumeError(tr("e.vol_access")) from e
+
+
+def _open_endpoint(name_part: str):
+    """找出名稱含 name_part 的作用中「播放」端點（id 以 {0.0.0 開頭；{0.0.1 是錄音／麥克風），
+    回傳 IAudioEndpointVolume。排除 Hands-Free（通話用）端點。每次呼叫都在目前執行緒重新取得。"""
+    AudioUtilities = _audio_utilities()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # pycaw 對讀不到的裝置屬性會大量警告
         for dev in AudioUtilities.GetAllDevices():
@@ -38,13 +53,28 @@ def _open_endpoint(name_part: str):
 
 class VolumeControl:
     """端點物件會快取（列舉所有音訊裝置很慢，拖曳音量時不能每次重找）；COM 是以執行緒為單位，
-    所以一個實例只能在建立它的執行緒使用。操作失敗（例如耳機斷線後端點失效）會重新尋找並重試一次。"""
+    所以一個實例只能在建立它的執行緒使用。操作失敗（例如耳機斷線後端點失效）會重新尋找並重試一次。
+    找不到耳機的端點時改用 fallback（預設是系統預設輸出裝置；自訂 opener 時預設不備援）。"""
 
     def __init__(self, name_part: str = "EDIFIER",
-                 opener: Optional[Callable[[str], object]] = None):
+                 opener: Optional[Callable[[str], object]] = None,
+                 fallback: Optional[Callable[[], object]] = None):
         self._name = name_part
         self._open = opener or _open_endpoint
+        self._fallback = fallback if fallback is not None else (_open_default_endpoint if opener is None else None)
         self._ep = None
+
+    def reset(self) -> None:
+        """丟掉快取的端點。耳機連上或斷線時呼叫，讓下次操作重新挑耳機端點或備援端點。"""
+        self._ep = None
+
+    def _find(self):
+        try:
+            return self._open(self._name)
+        except VolumeError:
+            if self._fallback is None:
+                raise
+            return self._fallback()
 
     def set_target(self, name_part: str) -> None:
         """換成另一台裝置的播放端點（名稱含 name_part）。多台 Edifier 裝置時，依目前連線裝置的名稱挑對的那一個。"""
@@ -55,7 +85,7 @@ class VolumeControl:
     def _call(self, fn):
         for attempt in (0, 1):
             if self._ep is None:
-                self._ep = self._open(self._name)
+                self._ep = self._find()
             try:
                 return fn(self._ep)
             except VolumeError:

@@ -643,3 +643,20 @@
 - 決定暫時放棄程式碼簽章（SignPath 需先累積專案知名度）；README 的安裝檔提醒改為 IMPORTANT：需自行決定信任，或從原始碼編譯，並附 Get-FileHash 驗證方式
 ### 待辦事項（TODO）
 - 專案有一定知名度後再評估申請 SignPath Foundation（Actions 建置流程已備妥）
+
+## 2026-10-28
+
+### 修改內容（Changes）
+- src/edifier_reverse/volume.py、src/EdifierTray/Service/VolumeControl.cs：找不到耳機播放端點時，改用系統預設輸出裝置（fallback），新增 reset()／Reset()
+- src/edifier_reverse/tray.py、src/EdifierTray/TrayHost.cs：連線狀態改變（連上或斷線）時重選端點並更新音量，不再只在連上時刷新
+- tests/test_volume.py、tests/EdifierTray.Tests/ServiceTests.cs：新增備援、reset、無備援仍失敗的測試
+- 版本升到 1.0.1（pyproject.toml、uv.lock、app.manifest）
+
+### 問題與解法（Problems & Solutions）
+- 原因：音量走 Windows 端點，耳機未連上時 volume=None，面板滑桿與選單音量項目被停用。解法：備援到預設輸出，按鈕恆可用
+- 驗證：pytest 274 通過、dotnet test 105 通過、本機 build-installer 產出 1.0.1 安裝檔（Python／C# 兩版、Setup.exe 皆已含修正）
+- 直接用 -ExecutionPolicy Bypass 跑 build-installer 被擋，改成直接執行腳本即可
+
+### 待辦事項（TODO）
+- 備援行為（耳機未連上時調到的是預設輸出）只有單元測試，未在實機驗證
+- 推 v1.0.1 標籤後，確認 release job 首次實測成功
