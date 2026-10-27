@@ -4,6 +4,8 @@
 
 ## 取得與安裝
 
+預建的安裝檔放在 [Releases](https://github.com/HoDZadkiel/EdifierReverse/releases)（目前為 pre-release，未簽章）。下表是各種取得方式。
+
 | 方式 | 說明 | 狀態 |
 |------|------|------|
 | **安裝檔** `scripts\build-installer.ps1` | 自含發佈（使用者不需要裝 .NET）+ Inno Setup，產生 `EdifierTray-Setup-<版本>.exe`（約 63 MB）。免系統管理員，安裝到 `%LOCALAPPDATA%\EdifierTray`，附「登入時啟動」選項、開始功能表捷徑與解除安裝程式 | 實測：靜默安裝、啟動、解除安裝（exe 與捷徑都移除）；未勾選自啟時不寫開機項目。**勾選自啟的路徑沒有實測**（寫入的機碼與 `install.ps1` 相同，後者以獨立機碼測過） |

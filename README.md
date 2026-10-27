@@ -27,7 +27,14 @@ Edifier 的進階功能（降噪、音量之外的設定等）只有手機 App �
 
 需要 Windows 10/11、藍牙，且耳機已在 Windows 配對並連上 A2DP（SPP 控制通道需要）。
 
-### C# 版（主推）
+### 下載安裝檔（最簡單）
+
+到 [Releases](https://github.com/HoDZadkiel/EdifierReverse/releases) 下載 `EdifierTray-Setup-<版本>.exe`，雙擊安裝即可。不需要安裝 .NET，也不需要系統管理員權限；安裝時可選擇「登入時啟動」。
+
+> [!NOTE]
+> 安裝檔目前**沒有程式碼簽章**，Windows SmartScreen 可能顯示「Windows 已保護您的電腦」。這是因為檔案沒有簽章與下載信譽，不代表有問題：點「更多資訊」→「仍要執行」。想自行確認，可比對 Release 頁面列出的 SHA-256，或照下面的方式從原始碼建置。安裝程式介面為英文，程式本身支援四種語言。
+
+### 從原始碼建置（C# 版）
 
 需要 [.NET 8 SDK](https://dotnet.microsoft.com/download)（`winget install Microsoft.DotNet.SDK.8`）。複製專案後擇一：
 
