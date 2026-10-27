@@ -550,3 +550,20 @@
 - 除 ES850NB 外的機種全部未驗證；BLE-only 機種在 C# 版尚未支援（需要 GATT 傳輸）
 - 多台同型號時，音量端點依裝置名稱挑選；若兩台名稱相同（Windows 沒有區分）會調到第一個
 - 真人實際操作右鍵選單（語言／外觀／裝置）的手感未驗證
+
+### 文件整理與推送到 GitHub 私人倉庫（2026-10-28 續）
+
+#### 修改內容（Changes）
+- 依 project-init 的 README 寫法重寫 README.md（目標、特色、截圖、兩版快速開始、運作方式 Mermaid、已驗證範圍、文件索引、Roadmap）；CLAUDE.md 更新為目前實況（目標、技術棧、資料夾用途、開發約定、禁止事項）；新增 docs/images/（README 截圖與 logo）
+- 初始化 git（使用者明確要求推送，故不適用 Nextcloud 預設不用 git），建立 GitHub 私人倉庫 HoDZadkiel/EdifierReverse 並推送 main（1 個 commit，115 個檔案）
+
+#### 問題與解法（Problems & Solutions）
+- 推送前審查：已追蹤檔案不含 docs/apk、docs/captures、.env 等；掃描無常見機密格式
+- 個資：測試與文件內的真實裝置位址全部換成示範位址（AA:BB:CC:11:22:33 等），測試仍全過（Python 271、C# 102）
+- 官方 APK 內的 AES 金鑰與 IV 原本寫死在 scripts/decrypt_products.py：不符合「不 push 反編譯產物」規則，改成讀被 gitignore 的 docs/apk/cipher.json（或環境變數 EDIFIER_CIPHER_FILE），解密結果與先前逐位元組一致；amend 了尚未推送的 commit
+- safe-push 腳本仍回報 2 項「高風險」：實際是文件裡的 Windows 路徑（C:\Work\...、%APPDATA%\...）被判成 Domain\User，以及 CLAUDE.md 裡「token／密碼」字樣；人工確認皆為誤報，未修改
+- catalog.json 內容衍生自官方產品表（只含機種名稱、UUID、旗標，不含文案與連結）
+
+#### 待辦事項（TODO）
+- 這則 DEVLOG 與其後的變更尚未 commit／push（使用者尚未要求再次推送）
+- 開 CI（.github/workflows 目前空）；除 ES850NB 外的機種實機驗證
