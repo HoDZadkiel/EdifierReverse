@@ -32,7 +32,7 @@ EdifierReverse/
 │   └── images/                 # 文件用圖（README 的截圖）
 ├── scripts/                    # 一鍵安裝（install.cmd/.ps1）、Setup.exe 安裝檔（build-installer.ps1 + installer/）、解密產品表、產生常數表／目錄、抽取 ANC／D8 表
 ├── examples/                   # 可執行的使用範例（目前空）
-└── .github/workflows/          # CI 設定（目前空）
+└── .github/workflows/          # release.yml：建置安裝檔，推 v* 標籤時上傳到 Release
 ```
 
 寫東西前先確認要寫進哪個目錄。不確定就問，不要自己開新的頂層目錄。
@@ -50,7 +50,7 @@ EdifierReverse/
 
 ## 版控
 
-本專案使用 git 版控（遠端為 GitHub 私人倉庫）。push 前逐項確認：`.gitignore` 涵蓋完整、`.env` 與金鑰檔未被追蹤、程式碼與文件內沒有 token／密碼／連線字串／硬編碼 IP 或裝置位址、README 沒有過期、沒有誤加大型二進位檔。push 前使用 `safe-push` skill。
+本專案使用 git 版控（遠端為 GitHub 公開倉庫）。push 前逐項確認：`.gitignore` 涵蓋完整、`.env` 與金鑰檔未被追蹤、程式碼與文件內沒有 token／密碼／連線字串／硬編碼 IP 或裝置位址、README 沒有過期、沒有誤加大型二進位檔。push 前使用 `safe-push` skill。
 
 ## 禁止事項
 

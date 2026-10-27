@@ -14,6 +14,14 @@
 
 安裝檔的尺寸：自含單檔 exe 已經壓縮過（68.8 MB，旁邊另有 5 個 WPF 原生 DLL），Inno 再壓也縮不了多少。改成不壓縮的單檔再交給 Inno 的 LZMA，也許能更小，**未嘗試**。安裝程式本身是英文介面（Inno Setup 沒有官方中文語言檔）。exe 與安裝檔都沒有簽章，從網路下載後 SmartScreen 會警告。
 
+## 發佈流程（GitHub Actions）
+
+`.github/workflows/release.yml`（windows-latest）：安裝 .NET 8 與 Inno Setup → `scripts/build-installer.ps1` → 算 SHA-256 → 上傳 artifact。推 `v*` 標籤時，再由另一個 job 把安裝檔與 `.sha256` 傳到同名 Release（沒有就建立，`v0.*` 標為 pre-release；已有就只替換附件）。
+
+發佈新版：改 `pyproject.toml` 的 `version` → commit → `git tag v<版本>` → `git push --tags`。標籤與 `pyproject.toml` 版本不一致時建置會失敗。手動執行（Actions → Run workflow）只建置、留下 artifact，不發佈。
+
+這個流程也是申請 [SignPath Foundation](https://signpath.org/) 免費簽章的前提：它要求安裝檔由倉庫原始碼自動建置（origin verification）。目前**尚未簽章**，也還沒申請。
+
 ## 開機自動啟動怎麼做的
 
 寫入目前使用者的 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（值名 `EdifierTray`，路徑加引號）。安裝檔、`install.ps1` 與托盤右鍵選單的開關寫的是同一個值，所以彼此對得上。

@@ -1,0 +1,81 @@
+name: Build installer
+
+# 推送 v* 標籤：建置安裝檔並上傳到對應的 GitHub Release。
+# 手動執行（Actions 頁面 → Run workflow）：只建置並留下 artifact，不發佈，用來試跑流程。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Read version
+        id: meta
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path pyproject.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          "version=$v" >> $env:GITHUB_OUTPUT
+          # 標籤必須和 pyproject.toml 的版本一致，否則安裝檔檔名與標籤對不上
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$v") {
+            throw "標籤 $env:GITHUB_REF_NAME 與 pyproject.toml 版本 v$v 不一致"
+          }
+
+      - name: Build installer
+        shell: pwsh
+        run: scripts\build-installer.ps1 -OutDir "$env:RUNNER_TEMP\out"
+
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $f = "$env:RUNNER_TEMP\out\EdifierTray-Setup-${{ steps.meta.outputs.version }}.exe"
+          $h = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+          "$h  $(Split-Path $f -Leaf)" | Out-File "$f.sha256" -Encoding ascii
+          Write-Host "SHA-256: $h"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: ${{ runner.temp }}/out/EdifierTray-Setup-*
+          if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer
+          path: out
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # 已有同名 Release（例如手動建立過）：只替換附件，不動說明文字
+            gh release upload "$TAG" out/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            flag=""
+            case "$TAG" in v0.*) flag="--prerelease" ;; esac   # 0.x 先標為預覽版
+            gh release create "$TAG" out/* $flag --title "$TAG" --generate-notes --repo "$GITHUB_REPOSITORY"
+          fi

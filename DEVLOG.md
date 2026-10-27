@@ -612,3 +612,16 @@
 - 使用者確認後才把 GitHub 倉庫改為公開（尚未執行）；公開前注意 catalog.json／協定文件衍生自官方 App 的法律灰色地帶
 - docs/deployment.md 的 4 個缺口；重新開機實機驗證；安裝檔勾選自啟路徑的實測
 - 本次變更尚未 commit／push
+
+### 公開與 Releases（Changes）
+- 倉庫改為 PUBLIC；README 加「下載安裝檔」與 SmartScreen 說明，docs/deployment.md 加 Releases 連結（commit c1325c9 已推送）
+- 建立 GitHub pre-release v0.1.0，附 EdifierTray-Setup-0.1.0.exe（63.2 MB，未簽章），release notes 含 SHA-256 與限制說明
+
+### 問題與解法（Problems & Solutions）
+- 簽章評估：SignPath Foundation 對開源專案免費（需 OSI 授權、持續維護、已發佈、GitHub Actions 自動化建置的來源驗證、MFA、README 內的 Code signing policy、每次發佈手動核准；憑證發給 SignPath Foundation；有權拒絕）。Azure Artifact Signing 要付費訂閱、不發 EV。簽章不會立刻消除 SmartScreen（信譽依檔案雜湊累積）
+- Release 的安裝檔是公開前的工作目錄建置，原始碼與 HEAD 一致（之後只改了文件）
+
+### 待辦事項（TODO）
+- 簽章：建 GitHub Actions 建置流程（目前 .github/workflows 空）後再申請 SignPath Foundation
+- 其餘同前：docs/deployment.md 的缺口、重新開機驗證、勾選自啟路徑實測
+- 本段 DEVLOG 尚未 commit／push
