@@ -31,8 +31,10 @@ Edifier 的進階功能（降噪、音量之外的設定等）只有手機 App �
 
 到 [Releases](https://github.com/HoDZadkiel/EdifierReverse/releases) 下載 `EdifierTray-Setup-<版本>.exe`，雙擊安裝即可。不需要安裝 .NET，也不需要系統管理員權限；安裝時可選擇「登入時啟動」。
 
-> [!NOTE]
-> 安裝檔目前**沒有程式碼簽章**，Windows SmartScreen 可能顯示「Windows 已保護您的電腦」。這是因為檔案沒有簽章與下載信譽，不代表有問題：點「更多資訊」→「仍要執行」。想自行確認，可比對 Release 頁面列出的 SHA-256，或照下面的方式從原始碼建置。安裝程式介面為英文，程式本身支援四種語言。
+> [!IMPORTANT]
+> 安裝檔**沒有程式碼簽章**（免費簽章方案需要專案先累積知名度，暫不申請）。Windows SmartScreen 會顯示「Windows 已保護您的電腦」，要安裝就必須自行決定信任它：點「更多資訊」→「仍要執行」。
+>
+> 不想信任預建檔案的話，請**從原始碼自行編譯**（見下一節），或先驗證下載檔：Release 頁面列有 SHA-256，可用 `Get-FileHash <檔案> -Algorithm SHA256` 比對。安裝程式介面為英文，程式本身支援四種語言。
 
 ### 從原始碼建置（C# 版）
 

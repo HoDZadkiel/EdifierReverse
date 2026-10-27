@@ -625,3 +625,21 @@
 - 簽章：建 GitHub Actions 建置流程（目前 .github/workflows 空）後再申請 SignPath Foundation
 - 其餘同前：docs/deployment.md 的缺口、重新開機驗證、勾選自啟路徑實測
 - 本段 DEVLOG 尚未 commit／push
+
+### GitHub Actions 建置流程（Changes）
+- 新增 `.github/workflows/release.yml`：windows-latest 安裝 .NET 8 + Inno Setup → build-installer.ps1 → SHA-256 → artifact；推 `v*` 標籤時另一 job 上傳到 Release（無則建立，v0.* 標 pre-release；已有則 --clobber 替換附件）；標籤與 pyproject.toml 版本不一致會失敗
+- docs/deployment.md 加〈發佈流程〉；CLAUDE.md 更新 workflows 說明與「公開倉庫」（commit 92733fa 已推送）
+
+### 問題與解法（Problems & Solutions）
+- 手動觸發 workflow_dispatch 試跑：build 成功、release 依設計略過。**tag 觸發的 release job 未實測**（不想動既有 v0.1.0）
+- safe-push 2 項高風險為誤判（CLAUDE.md 的「token／密碼」字樣、yml 內 Windows 路徑）
+- 執行時有 Node.js 20 棄用警告（actions 被強制用 Node 24 跑），之後可升級 actions 版本
+
+### 待辦事項（TODO）
+- 下次發佈 tag 時實測 release job；之後申請 SignPath Foundation（需 README 加 Code signing policy、改用其 GitHub Action 簽章）
+- 本段 DEVLOG 尚未 commit／push
+
+### 簽章決定（Changes）
+- 決定暫時放棄程式碼簽章（SignPath 需先累積專案知名度）；README 的安裝檔提醒改為 IMPORTANT：需自行決定信任，或從原始碼編譯，並附 Get-FileHash 驗證方式
+### 待辦事項（TODO）
+- 專案有一定知名度後再評估申請 SignPath Foundation（Actions 建置流程已備妥）
