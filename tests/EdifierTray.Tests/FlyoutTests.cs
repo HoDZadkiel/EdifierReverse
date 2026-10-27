@@ -39,6 +39,10 @@ public class FlyoutTests
 
             var f = new FlyoutWindow();
             f.ApplyState(new DeviceState(true, "EDIFIER ES850NB", "1.0.1", 16, new AncState(16, 4, 8)), 50, false);
+            // 左下角顯示版本號，與 pyproject.toml 的 version 同一份
+            Assert.Matches(@"^v\d+\.\d+\.\d+$", f.VersionLabel);
+            Assert.Equal("v" + FlyoutWindow.AppVersion, f.VersionLabel);
+            Assert.StartsWith("https://github.com/", FlyoutWindow.RepoUrl);
 
             // 冷卻期：磚塊與強度條停用，但目前模式（環境音）仍標示選中
             var cool = new DeviceState(true, "EDIFIER ES850NB", "1.0.1", 16, new AncState(16, 4, 8), Cooling: true);

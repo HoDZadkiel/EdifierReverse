@@ -26,9 +26,24 @@ public partial class FlyoutWindow : Window
     DateTime _shownAt = DateTime.MinValue, _hiddenAt = DateTime.MinValue;
     DeviceState _state = new();
 
+    /// <summary>程式版本（編譯時由 pyproject.toml 的 version 寫入，去掉 +commit 後綴）。</summary>
+    public static string AppVersion { get; } =
+        (typeof(FlyoutWindow).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .Cast<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "").Split('+')[0];
+
+    public const string RepoUrl = "https://github.com/HoDZadkiel/EdifierReverse";
+
+    public string VersionLabel => VersionText.Text;
+
     public FlyoutWindow()
     {
         InitializeComponent();
+        VersionText.Text = "v" + AppVersion;
+        VersionText.MouseLeftButtonUp += (_, _) =>  // 版本號連到 GitHub 倉庫
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(RepoUrl) { UseShellExecute = true }); }
+            catch (Exception) { }
+        };
         _tiles = new[] { Mode1, Mode2, Mode3, Mode4, Mode5 };
         foreach (var t in _tiles) t.Click += (_, _) => AncRequested?.Invoke(int.Parse((string)t.Tag));
 

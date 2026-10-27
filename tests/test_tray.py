@@ -244,3 +244,24 @@ def test_app_ignores_anc_requests_during_the_cooldown():
         assert app.state.anc.mode == 2
     finally:
         app.runner.stop()
+
+
+def test_flyout_shows_the_app_version_in_the_bottom_left(tk_root):
+    # 版本號來自 pyproject.toml（套件 metadata），面板左下角要看得到
+    from importlib.metadata import version
+
+    f, _ = make_flyout(tk_root)
+    assert f.version_lbl.cget("text") == f"v{version('edifier-reverse')}"
+
+
+def test_clicking_the_version_opens_the_github_repo(tk_root, monkeypatch):
+    import webbrowser
+
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", opened.append)
+    f, _ = make_flyout(tk_root)
+    f.show()  # 沒顯示（unmapped）的元件收不到事件
+    f.win.update()
+    f.version_lbl.event_generate("<ButtonRelease-1>")
+    f.win.update()
+    assert opened == ["https://github.com/HoDZadkiel/EdifierReverse"]

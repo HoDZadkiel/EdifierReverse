@@ -9,6 +9,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>EdifierTray</AssemblyName>
     <RootNamespace>EdifierTray</RootNamespace>
+    <!-- 版本號只在 pyproject.toml 維護一份，編譯時讀進來（面板左下角顯示用） -->
+    <Version>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\..\pyproject.toml')), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value)</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <InvariantGlobalization>true</InvariantGlobalization>

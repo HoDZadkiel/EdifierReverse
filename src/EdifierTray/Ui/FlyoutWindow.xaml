@@ -63,6 +63,8 @@
       <DockPanel Margin="0,10,0,0">
         <TextBlock x:Name="QuitLink" DockPanel.Dock="Right" Text="{DynamicResource T_p_quit}" Style="{StaticResource LinkText}"/>
         <TextBlock x:Name="ReconnectLink" DockPanel.Dock="Right" Text="{DynamicResource T_p_reconnect}" Style="{StaticResource LinkText}"/>
+        <TextBlock x:Name="VersionText" DockPanel.Dock="Left" FontSize="12" Margin="0,0,10,0" VerticalAlignment="Center" Cursor="Hand"
+                   Foreground="{DynamicResource SubBrush}" ToolTip="GitHub"/>
         <TextBlock x:Name="MessageText" FontSize="12" Foreground="{DynamicResource ErrorBrush}"
                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
       </DockPanel>

@@ -243,6 +243,19 @@ class IconButton(tk.Canvas):
                                 style="arc", outline=fg, width=max(1, S(1.5)))
 
 
+REPO_URL = "https://github.com/HoDZadkiel/EdifierReverse"
+
+
+def app_version() -> str:
+    """程式版本（來自套件 metadata，也就是 pyproject.toml 的 version）；讀不到時回空字串。"""
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("edifier-reverse")
+    except PackageNotFoundError:
+        return ""
+
+
 class Flyout:
     """彈出面板。callbacks: anc(mode)、ambient(db)、volume(percent, final)、mute()、reconnect()、quit()。"""
 
@@ -331,6 +344,10 @@ class Flyout:
         # 頁尾：訊息與動作
         foot = tk.Frame(body, bg=t.bg)
         foot.pack(fill="x", padx=P, pady=(S(10), P))
+        self.version_lbl = tk.Label(foot, text=f"v{app_version()}" if app_version() else "", font=self.f_small,
+                                    fg=t.sub, bg=t.bg, cursor="hand2")
+        self.version_lbl.pack(side="left", padx=(0, S(10)))
+        self.version_lbl.bind("<ButtonRelease-1>", lambda e: self.open_repo())  # 版本號連到 GitHub 倉庫
         self.msg_lbl = tk.Label(foot, text="", font=self.f_small, fg=t.error, bg=t.bg, anchor="w")
         self.msg_lbl.pack(side="left", fill="x", expand=True)
         for text, key in ((tr("p.quit"), "quit"), (tr("p.reconnect"), "reconnect")):
@@ -396,6 +413,11 @@ class Flyout:
     def _volume_change(self, v: int, final: bool) -> None:
         self.vol_val.config(text=f"{v}%")
         self.cb["volume"](v, final)
+
+    def open_repo(self) -> None:
+        import webbrowser
+
+        webbrowser.open(REPO_URL)
 
     def show_message(self, text: str, ms: int = 4000) -> None:
         self.msg_lbl.config(text=text)

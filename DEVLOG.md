@@ -660,3 +660,19 @@
 ### 待辦事項（TODO）
 - 備援行為（耳機未連上時調到的是預設輸出）只有單元測試，未在實機驗證
 - 推 v1.0.1 標籤後，確認 release job 首次實測成功
+
+### 1.0.1 實測回饋後的修改（Changes）
+- scripts/installer/EdifierTray.iss：移除 AppMutex（會讓 Setup 一開始卡在「請先關閉」），改 CloseApplications=force，加 [Code] PrepareToInstall 與 UninstallRun 用 taskkill 結束 EdifierTray.exe
+- src/edifier_reverse/flyout.py、src/EdifierTray/Ui/FlyoutWindow.xaml(.cs)：面板左下角顯示版本號（Python 讀套件 metadata；C# 由 csproj 編譯時從 pyproject.toml 讀入 Version）
+- 版本升 1.0.2（pyproject.toml、uv.lock、app.manifest）；測試各加版本標籤檢查（pytest 275、dotnet 105 通過）
+
+### 問題與解法（Problems & Solutions）
+- 1.0.1 實測：開機自動啟動 OK、直接覆蓋安裝 OK、安裝時無法自動關閉程式 → 見上
+- Python heredoc 內的 "{sys}\taskkill" 被當成 Tab，改用 raw string；已確認 .iss 內容正確
+
+### 待辦事項（TODO）
+- 1.0.2 尚未 push／打標籤；本機已建出 Setup 1.0.2，待實測「程式執行中直接升級」會不會自動關閉
+
+### 版本號連結（Changes）
+- flyout.py／FlyoutWindow.xaml(.cs)：左下角版本號可點擊，開啟 GitHub 倉庫（Python 用 webbrowser；C# 用 ShellExecute），滑過顯示手形游標；兩邊各加測試
+- 仍是 1.0.2，尚未 push／打標籤

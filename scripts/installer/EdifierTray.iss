@@ -23,8 +23,10 @@ WizardStyle=modern
 SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\EdifierTray.exe
 OutputBaseFilename=EdifierTray-Setup-{#AppVersion}
-; 程式執行中時，安裝／解除安裝會先要求關閉（單例鎖的名稱，與 App.xaml.cs 相同）
-AppMutex=EdifierTray.SingleInstance
+; 升級時自動關閉執行中的 EdifierTray，不再停在「請先關閉」的提示
+; （AppMutex 會讓 Setup 一開始就卡住等使用者手動關，所以不用；改由下面的 PrepareToInstall 強制結束）
+CloseApplications=force
+RestartApplications=no
 
 [Tasks]
 Name: "autostart"; Description: "Start Edifier Tray when I sign in to Windows"
@@ -41,3 +43,17 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\EdifierTray.exe"; Description: "Launch Edifier Tray"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM EdifierTray.exe"; Flags: runhidden; RunOnceId: "StopEdifierTray"
+
+[Code]
+// 安裝前結束執行中的 EdifierTray（托盤程式沒有一般視窗，Restart Manager 的關閉要求常常無效）
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM EdifierTray.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(500);
+  Result := '';
+end;
