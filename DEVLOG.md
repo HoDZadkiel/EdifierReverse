@@ -676,3 +676,14 @@
 ### 版本號連結（Changes）
 - flyout.py／FlyoutWindow.xaml(.cs)：左下角版本號可點擊，開啟 GitHub 倉庫（Python 用 webbrowser；C# 用 ShellExecute），滑過顯示手形游標；兩邊各加測試
 - 仍是 1.0.2，尚未 push／打標籤
+
+### 加入 Ko-fi 贊助連結（Changes）
+- 新增 .github/FUNDING.yml（ko_fi: hodzadkiel），倉庫頁會出現 Sponsor 按鈕
+- README.md：在「授權與聲明」後新增「支持這個專案」段落（自願贊助、不影響功能、不構成承諾）
+
+### 問題與解法（Problems & Solutions）
+- GitHub Sponsors 不支援台灣地區 → 改用 Ko-fi
+
+### 待辦事項（TODO）
+- 確認任職規定是否允許收外部贊助；贊助收入需自行評估報稅
+- 尚未 push；push 前走 safe-push
