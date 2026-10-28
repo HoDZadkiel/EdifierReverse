@@ -10,7 +10,7 @@ public sealed class KnownDevice
     [JsonPropertyName("version")] public int Version { get; set; } = 2;
     [JsonPropertyName("encryption")] public int Encryption { get; set; }
     [JsonPropertyName("name")] public string Name { get; set; } = "";   // 連上後由 0xC9 取得
-    [JsonPropertyName("model")] public string Model { get; set; } = "ES850NB";  // 辨識出的機種（目錄名稱）；不在目錄的為 "Edifier"
+    [JsonPropertyName("model")] public string Model { get; set; } = "Edifier";  // 辨識出的機種（目錄名稱）；不在目錄的為 "Edifier"
 
     /// <summary>位址後四碼，用來區分同型號的多台裝置。</summary>
     [JsonIgnore] public string Tail => A2dp.Length >= 5 ? A2dp[^5..] : A2dp;

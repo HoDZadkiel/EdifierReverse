@@ -25,8 +25,8 @@ from .volume import VolumeControl, VolumeError
 MODEL_GROUP = 16  # 只有 group 16 的模式表經實機驗證
 
 
-def tooltip_text(state: DeviceState) -> str:
-    name = state.name or "ES850NB"
+def tooltip_text(state: DeviceState, fallback_name: str = "Edifier") -> str:
+    name = state.name or fallback_name
     if not state.connected:
         return tr("t.disconnected", name=name) + (f"\n{state.error}" if state.error else "")
     mode = state.anc_label
@@ -91,6 +91,7 @@ class TrayApp:
         self.scanning = False
         self.headless = headless
         self._tasks: "queue.Queue[Callable[[], None]]" = queue.Queue()
+        self.watcher = None
         self.runner = ServiceRunner(connector, lambda s: self.post(lambda: self._apply_state(s)))
         self.root = self.flyout = self.icon = self.menu = None
 
@@ -156,7 +157,34 @@ class TrayApp:
     def select_device(self, a2dp: str) -> None:
         if self.directory is None or not self.directory.select(a2dp):
             return
+        self._watch_current()
         self.runner.service.reconnect()
+
+    # ---- 連線事件：已配對的耳機連上電腦時提前重連 ----
+    def _watch_current(self) -> None:
+        if self.directory is None or self.runner.loop is None:
+            return
+        if self.watcher is None:
+            from .pairing import ConnectionWatcher
+
+            loop, svc = self.runner.loop, self.runner.service
+            self.watcher = ConnectionWatcher(lambda: loop.call_soon_threadsafe(svc.notify_device_available))
+        cur = self.directory.current()
+        self.runner.submit(self.watcher.watch(cur.a2dp if cur is not None else ""))
+
+    async def _prune_and_watch(self) -> None:
+        """啟動時清掉已不再配對的已知裝置，再開始監看；失敗不影響其他功能。"""
+        try:
+            await self.directory.prune_unpaired()
+        except Exception:
+            pass
+        self.post(self._watch_current)
+
+    @property
+    def fallback_name(self) -> str:
+        from .devices import DeviceDirectory
+
+        return DeviceDirectory.fallback_name(self.directory.current() if self.directory is not None else None)
 
     def rescan_devices(self) -> None:
         if self.directory is None or self.scanning:
@@ -171,7 +199,7 @@ class TrayApp:
                 msg = tr("m.found_n", n=len(found))
             except Exception as e:
                 msg = tr("e.scan_failed", err=e)
-            self.post(lambda: self._say(msg))
+            self.post(lambda: (self._say(msg), self._watch_current()))  # 第一次掃到裝置時才有選用裝置可監看
 
         fut.add_done_callback(done)
 
@@ -200,9 +228,9 @@ class TrayApp:
         state = state or self.state
         if self.icon is not None:
             self.icon.icon = make_logo(64, state.battery, state.connected)
-            self.icon.title = tooltip_text(state)
+            self.icon.title = tooltip_text(state, self.fallback_name)
         if self.flyout is not None:
-            self.flyout.update(state, self.volume_percent, self.muted)
+            self.flyout.update(state, self.volume_percent, self.muted, self.fallback_name)
 
     def refresh_volume(self) -> None:
         try:
@@ -274,7 +302,7 @@ class TrayApp:
     def show_menu_at(self, x: int, y: int) -> None:
         """依目前狀態重建選單並在指定位置（裝置像素）切換顯示。"""
         entries = build_menu(self.state, self.volume_percent, self.muted, _autostart.is_enabled(),
-                             self._device_rows(), self.settings.theme, i18n.language(), self.scanning)
+                             self._device_rows(), self.settings.theme, i18n.language(), self.scanning, self.fallback_name)
         self.menu.populate(entries, self.state)
         self.menu.toggle_at(x, y)
 
@@ -304,6 +332,8 @@ class TrayApp:
         self.runner.stop()
         if self.icon is not None:
             self.icon.stop()
+        if self.watcher is not None:
+            self.watcher.stop()
         if self.root is not None:
             self.root.quit()
 
@@ -323,9 +353,11 @@ class TrayApp:
         menu = pystray.Menu(pystray.MenuItem(tr("m.open"), lambda icon, item: self.post(lambda: self.flyout.toggle()),
                                              default=True))
         self.icon = _make_icon("edifier-reverse", make_logo(64, None, False),
-                               tr("t.connecting", name="ES850NB"), menu,
+                               tr("t.connecting", name=self.fallback_name), menu,
                                lambda x, y: self.post(lambda: self.show_menu_at(x, y)))
         self.runner.start()
+        if self.directory is not None:
+            self.runner.submit(self._prune_and_watch())
         self.refresh_volume()
         self._render()
         self.icon.run_detached()

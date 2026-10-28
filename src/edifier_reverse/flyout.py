@@ -297,7 +297,7 @@ class Flyout:
         self.logo_lbl.pack(side="left")
         names = tk.Frame(head, bg=t.bg)
         names.pack(side="left", padx=(S(12), 0))
-        self.name_lbl = tk.Label(names, text="ES850NB", font=self.f_title, fg=t.text, bg=t.bg, anchor="w")
+        self.name_lbl = tk.Label(names, text="Edifier", font=self.f_title, fg=t.text, bg=t.bg, anchor="w")
         self.name_lbl.pack(anchor="w")
         self.status_lbl = tk.Label(names, text=tr("p.connecting"), font=self.f_small, fg=t.sub, bg=t.bg, anchor="w")
         self.status_lbl.pack(anchor="w")
@@ -426,14 +426,14 @@ class Flyout:
         self._msg_job = self.win.after(ms, lambda: self.msg_lbl.config(text=""))
 
     # ---- 狀態 ----
-    def update(self, state: DeviceState, volume: Optional[int], muted: bool) -> None:
+    def update(self, state: DeviceState, volume: Optional[int], muted: bool, fallback_name: str = "Edifier") -> None:
         from PIL import ImageTk
 
         self.state, self.volume, self.muted = state, volume, muted
         t = self.theme
         self._logo_img = ImageTk.PhotoImage(make_logo(self.S(48), state.battery, state.connected))
         self.logo_lbl.config(image=self._logo_img)
-        self.name_lbl.config(text=state.name or "ES850NB")
+        self.name_lbl.config(text=state.name or fallback_name)
         if state.connected:
             self.status_lbl.config(text=tr("p.connected_fw", v=state.version))
             # 淺色底上的淺綠／橘字不易讀，淺色主題改用一般文字色（電量色已在 logo 的環上）

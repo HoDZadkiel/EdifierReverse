@@ -102,9 +102,15 @@ def adverts(*items):
     return scanner
 
 
-def directory(scan_items=(), settings=None):
+def directory(scan_items=(), settings=None, unpaired=()):
+    """unpaired：視為沒配對的位址；其餘都視為已配對。"""
     saves = []
-    d = DeviceDirectory("ES850NB", settings or S.Settings(), save=lambda s: saves.append(1), scanner=adverts(*scan_items))
+
+    async def is_paired(a2dp):
+        return a2dp not in unpaired
+
+    d = DeviceDirectory("ES850NB", settings or S.Settings(), save=lambda s: saves.append(1),
+                        scanner=adverts(*scan_items), is_paired=is_paired)
     return d, saves
 
 
@@ -181,3 +187,25 @@ def test_menu_text_follows_the_language():
     assert next(e for e in m if e.id == "quit").text == "Quit"
     i18n.set_language("ja")
     assert next(e for e in build_menu(conn(), 50, False, False) if e.id == "open").text == "パネルを開く"
+
+def test_unpaired_devices_found_nearby_are_hidden():
+    d, _ = directory(TWO, unpaired={TWO[1][0]})
+    assert [x.a2dp for x in asyncio.run(d.scan())] == [TWO[0][0]]   # 沒配對的連不上，不列出
+    assert [x.a2dp for x in d.devices] == [TWO[0][0]]
+
+
+def test_a_device_that_is_no_longer_paired_is_dropped_and_the_selection_cleared():
+    unpaired = set()
+    d, _ = directory(TWO, unpaired=unpaired)
+    asyncio.run(d.scan())
+    d.select(TWO[1][0])
+    unpaired.add(TWO[1][0])                                          # 使用者在系統裡移除了配對
+    asyncio.run(d.prune_unpaired())
+    assert [x.a2dp for x in d.devices] == [TWO[0][0]]
+    assert d.current().a2dp == TWO[0][0]                             # 選擇回到仍存在的第一台
+
+
+def test_fallback_name_uses_the_known_device_not_a_hardcoded_model():
+    assert DeviceDirectory.fallback_name(None) == "Edifier"
+    assert DeviceDirectory.fallback_name(S.KnownDevice("A", model="MP330")) == "MP330"
+    assert DeviceDirectory.fallback_name(S.KnownDevice("A", model="MP330", name="EDIFIER X")) == "EDIFIER X"

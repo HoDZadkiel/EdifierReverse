@@ -16,7 +16,7 @@ class KnownDevice:
     version: int = 2
     encryption: int = 0
     name: str = ""            # 連上後由 0xC9 取得；沒連過是空字串
-    model: str = "ES850NB"   # 辨識出的機種（目錄名稱）；不在目錄的 Edifier 裝置為 "Edifier"
+    model: str = "Edifier"   # 辨識出的機種（目錄名稱）；不在目錄的 Edifier 裝置為 "Edifier"
 
     @property
     def tail(self) -> str:

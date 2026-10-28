@@ -246,6 +246,46 @@ public class ServiceTests
         finally { await svc.StopAsync(); }
     }
 
+    [Fact] public async Task Device_available_notice_cuts_the_backoff_short()
+    {
+        int calls = 0;
+        bool deviceUp = false;
+        Connector c = _ =>
+        {
+            calls++;
+            if (!deviceUp) throw new IOException("裝置還沒開");
+            return Task.FromResult(((ITransport)new FakeDevice(S), S));
+        };
+        var svc = new DeviceService(c, backoff: new[] { TimeSpan.FromSeconds(30) });  // 不通知的話要等 30 秒
+        svc.Start();
+        try
+        {
+            for (int i = 0; i < 100 && calls < 1; i++) await Task.Delay(10);
+            await Task.Delay(100);  // 讓服務進入退避等待
+            deviceUp = true;
+            svc.NotifyDeviceAvailable();
+            await svc.WaitConnectedAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal(2, calls);
+        }
+        finally { await svc.StopAsync(); }
+    }
+
+    [Fact] public async Task Device_available_notice_does_not_drop_a_healthy_connection()
+    {
+        var (devs, c) = Make();
+        var svc = new DeviceService(c, backoff: FastBackoff);
+        svc.Start();
+        await svc.WaitConnectedAsync(TimeSpan.FromSeconds(3));
+        try
+        {
+            svc.NotifyDeviceAvailable();  // 已連線：必須忽略，否則會把好的連線斷掉重連
+            await Task.Delay(300);
+            Assert.Single(devs);
+            Assert.True(svc.State.Connected);
+        }
+        finally { await svc.StopAsync(); }
+    }
+
     [Fact] public async Task Set_when_not_connected_is_an_error()
     {
         var (_, c) = Make();

@@ -124,7 +124,7 @@ public partial class FlyoutWindow : Window
     }
 
     // ---- 狀態 ----
-    public void ApplyState(DeviceState s, int? volume, bool muted)
+    public void ApplyState(DeviceState s, int? volume, bool muted, string fallbackName = Catalog.GenericModel)
     {
         _state = s;
         _updating = true;
@@ -132,7 +132,7 @@ public partial class FlyoutWindow : Window
         {
             using (var bmp = LogoRenderer.Render(96, s.Battery, s.Connected))
                 LogoImage.Source = LogoRenderer.ToImageSource(bmp);
-            NameText.Text = s.Name == "" ? "ES850NB" : s.Name;
+            NameText.Text = s.Name == "" ? fallbackName : s.Name;
             if (s.Connected)
             {
                 StatusText.Text = Strings.T("p.connected_fw", new { v = s.Version });

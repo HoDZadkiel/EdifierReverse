@@ -82,6 +82,8 @@ class DeviceService:
         self._lost = asyncio.Event()
         self._wake = asyncio.Event()
         self._task: Optional[asyncio.Task] = None
+        self._backing_off = False
+        self._fast_retry = False
 
     # ---- 生命週期 ----
     def start(self) -> None:
@@ -111,6 +113,14 @@ class DeviceService:
     def reconnect(self) -> None:
         """要求立刻重連（略過退避等待）。"""
         self._lost.set()
+        self._wake.set()
+
+    def notify_device_available(self) -> None:
+        """藍牙事件通知「裝置已連上電腦」（要在事件迴圈的執行緒呼叫）：只在斷線等待重試時才提前重連，
+        並讓下次失敗從最短退避重來（事件觸發時 SPP 可能還沒就緒）。已連線或正在連線時忽略，不會中斷健康的連線。"""
+        if not self._backing_off:
+            return
+        self._fast_retry = True
         self._wake.set()
 
     # ---- 狀態 ----
@@ -184,13 +194,19 @@ class DeviceService:
                         await transport.close()
                     except Exception:
                         pass
+            if self._fast_retry:
+                self._fast_retry = False
+                failures = 0
             delay = self._backoff[min(failures, len(self._backoff) - 1)]
             failures += 1
             self._wake.clear()
+            self._backing_off = True
             try:
                 await asyncio.wait_for(self._wake.wait(), delay)
             except asyncio.TimeoutError:
                 pass
+            finally:
+                self._backing_off = False
 
     # ---- 設定 ----
     async def set_anc(self, mode: int, db: Optional[int] = None) -> AncState:

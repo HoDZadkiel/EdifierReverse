@@ -4,7 +4,7 @@
 （前 6 bytes 是經典藍牙位址，倒數兩個 byte 是版本與加密），掃描要數秒，所以掃過的裝置都記住。
 一次只連一台（耳機的 SPP 一次只服務一個控制端）。
 """
-from typing import Callable, List, Optional, Tuple
+from typing import Awaitable, Callable, List, Optional, Tuple
 
 from . import settings as S
 from .i18n import tr
@@ -16,11 +16,13 @@ from .transport import Transport
 class DeviceDirectory:
     def __init__(self, model: str = "ES850NB", settings: Optional[S.Settings] = None,
                  save: Optional[Callable[[S.Settings], None]] = None,
-                 scanner: Optional[Callable[[float], "object"]] = None):
+                 scanner: Optional[Callable[[float], "object"]] = None,
+                 is_paired: Optional[Callable[[str], Awaitable[bool]]] = None):
         self.model = model
         self.settings = settings if settings is not None else S.load()
         self._save = save or S.save
         self._scanner = scanner  # 測試可注入；預設用 bleak
+        self._is_paired = is_paired  # 測試可注入；預設問 Windows 這台電腦有沒有配對
 
     # ---- 查詢 ----
     @property
@@ -29,6 +31,11 @@ class DeviceDirectory:
 
     def current(self) -> Optional[S.KnownDevice]:
         return self.settings.current_device()
+
+    @staticmethod
+    def fallback_name(dev: Optional[S.KnownDevice]) -> str:
+        """還沒連上、讀不到裝置名稱時顯示的名稱：連過的用裝置名稱，否則用機種名稱，不知道機種就用 Edifier。"""
+        return "Edifier" if dev is None else dev.name or dev.model
 
     def label(self, dev: S.KnownDevice) -> str:
         """選單上的名稱：連過的有裝置名稱，沒連過的顯示「裝置 + 後四碼」；一律附後四碼以區分同型號多台。"""
@@ -59,15 +66,32 @@ class DeviceDirectory:
             from .ble import discover_all
 
             adverts = await discover_all(seconds)
-        seen = []
         for a in adverts:
-            dev = S.KnownDevice(a.a2dp_address, a.ble_address, a.session.version, a.session.encryption,
-                                model=getattr(a, "model", "") or self.model)
-            self.settings.remember(dev)
-            seen.append(self.settings.device(dev.a2dp))
+            self.settings.remember(S.KnownDevice(a.a2dp_address, a.ble_address, a.session.version, a.session.encryption,
+                                                 model=getattr(a, "model", "") or self.model))
+        await self.prune_unpaired()
+        seen = [d for d in (self.settings.device(a.a2dp_address) for a in adverts) if d is not None]
         if seen:
             self._save(self.settings)
         return seen
+
+    async def prune_unpaired(self) -> None:
+        """把這台電腦沒有配對的裝置從清單移除（廣播會掃到附近所有 Edifier 裝置，沒配對的連不上）。
+        選用的被移除就清掉選擇。"""
+        if self._is_paired is None:
+            from .pairing import is_paired
+
+            self._is_paired = is_paired
+        changed = False
+        for dev in list(self.settings.devices):
+            if await self._is_paired(dev.a2dp):
+                continue
+            self.settings.devices.remove(dev)
+            if self.settings.selected.upper() == dev.a2dp.upper():
+                self.settings.selected = ""
+            changed = True
+        if changed:
+            self._save(self.settings)
 
     # ---- 連線 ----
     def connector(self, scan_seconds: float = 8.0) -> Connector:

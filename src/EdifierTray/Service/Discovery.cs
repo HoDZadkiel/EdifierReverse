@@ -1,4 +1,6 @@
 using EdifierTray.Protocol;
+using EdifierTray.Transport;
+using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Storage.Streams;
 
@@ -59,6 +61,17 @@ public static class Discovery
         catch (OperationCanceledException) { }
         finally { watcher.Stop(); }
         lock (found) return found.Values.OrderByDescending(f => f.Rssi).ToList();
+    }
+
+    /// <summary>這台電腦是否已配對該裝置（經典藍牙位址）。查不到時回傳 true：寧可多顯示，也不要因為 API 失敗把裝置藏起來。</summary>
+    public static async Task<bool> IsPairedAsync(string a2dpAddress)
+    {
+        try
+        {
+            using var dev = await BluetoothDevice.FromBluetoothAddressAsync(RfcommTransport.ParseAddress(a2dpAddress));
+            return dev?.DeviceInformation.Pairing.IsPaired ?? false;
+        }
+        catch (Exception) { return true; }
     }
 
     /// <summary>命令列與自動化用：依設定檔的選用裝置連線。</summary>

@@ -35,7 +35,7 @@ class MenuEntry:
 
 def build_menu(state: DeviceState, volume: Optional[int], muted: bool, autostart: bool,
                devices: Sequence[Tuple[str, str, bool]] = (), theme: str = "system", language: str = "zh-TW",
-               scanning: bool = False) -> List[MenuEntry]:
+               scanning: bool = False, fallback_name: str = "Edifier") -> List[MenuEntry]:
     """降噪項目在未連線、group 未驗證、或冷卻期內都停用（冷卻期內裝置會忽略設定）。
     devices：(位址, 顯示名稱, 是否為目前選用) 的清單。"""
     can_anc = state.connected and state.anc_supported and not state.cooling
@@ -45,7 +45,7 @@ def build_menu(state: DeviceState, volume: Optional[int], muted: bool, autostart
     # 標頭用簡短的模式名稱，長名稱（例如英文）會把整個選單撐寬
     mode_name = tr(f"anc.s.{state.anc.mode}") if selectable and state.anc is not None else state.anc_label
     detail = tr("m.header_detail", b=state.battery, mode=mode_name) if state.connected else tr("m.not_connected")
-    items: List[MenuEntry] = [MenuEntry(HEADER, state.name or "ES850NB", detail=detail), sep,
+    items: List[MenuEntry] = [MenuEntry(HEADER, state.name or fallback_name, detail=detail), sep,
                               MenuEntry(LABEL, tr("m.anc"))]
     for mode in MODE_IDS:
         items.append(MenuEntry(ITEM, tr(f"anc.s.{mode}"), "",

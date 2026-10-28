@@ -240,3 +240,47 @@ def test_cli_status_and_anc_print_results(capsys):
 
     with pytest.raises(SystemExit, match="只有可調增益"):
         run(go(argparse.Namespace(cmd="anc", timeout=2.0, mode=2, db=5)))
+
+def test_device_available_notice_cuts_the_backoff_short():
+    async def go():
+        calls = []
+        up = []
+
+        async def connector():
+            calls.append(1)
+            if not up:
+                raise ConnectionError("裝置還沒開")
+            dev = SimulatedDevice(SESSION)
+            dev.state[C.ANC_QUERY] = bytes([16, 1])
+            return dev, SESSION
+
+        svc = DeviceService(connector, backoff=(30.0,))  # 不通知的話要等 30 秒
+        svc.start()
+        try:
+            for _ in range(100):
+                if calls:
+                    break
+                await asyncio.sleep(0.01)
+            await asyncio.sleep(0.1)  # 讓服務進入退避等待
+            up.append(1)
+            svc.notify_device_available()
+            await svc.wait_connected(3)
+            return len(calls)
+        finally:
+            await svc.stop()
+
+    assert run(go()) == 2
+
+
+def test_device_available_notice_does_not_drop_a_healthy_connection():
+    async def go():
+        devices, connector = make()
+        svc = await started(connector)
+        try:
+            svc.notify_device_available()  # 已連線：必須忽略，否則會把好的連線斷掉重連
+            await asyncio.sleep(0.3)
+            return len(devices), svc.state.connected
+        finally:
+            await svc.stop()
+
+    assert run(go()) == (1, True)

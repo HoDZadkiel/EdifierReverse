@@ -27,7 +27,8 @@ def connected(battery=80, mode=1, db=None):
 # ---- 提示文字與圖示 ----
 def test_tooltip_disconnected_shows_the_error():
     t = tooltip_text(DeviceState(False, error="ConnectionError: 掃不到"))
-    assert t.startswith("ES850NB：未連線") and "掃不到" in t
+    assert t.startswith("Edifier：未連線") and "掃不到" in t  # 沒有裝置資訊時不假設是哪個機種
+    assert tooltip_text(DeviceState(False), "ES850NB").startswith("ES850NB：未連線")  # 有選用裝置時用它的機種／名稱
 
 
 def test_tooltip_shows_battery_mode_and_ambient_strength_only_in_ambient_mode():

@@ -687,3 +687,48 @@
 ### 待辦事項（TODO）
 - 確認任職規定是否允許收外部贊助；贊助收入需自行評估報稅
 - 尚未 push；push 前走 safe-push
+
+### 與 GitHub 比對並同步（Changes）
+- 比對結果：本機僅多 .github/FUNDING.yml、README「支持這個專案」段落、DEVLOG 11 行，其餘與 GitHub（3c958a1）相同
+- 在暫存 clone 套用三檔，safe-push 六項檢查通過後 push：3c958a1..2fd5420（main）
+
+### 待辦事項（TODO）
+- 確認任職規定是否允許收外部贊助（前述待辦仍未解）
+- 已確認任職規定無外部贊助限制，前述待辦解除（報稅仍需自行評估）
+
+### 建立全域 .github 倉庫（Changes）
+- 建立公開倉庫 HoDZadkiel/.github，內含 FUNDING.yml（ko_fi: hodzadkiel）與 README，其他倉庫沒有自己的 FUNDING.yml 時會套用
+- 新專案骨架（project-init）尚未加 FUNDING.yml
+
+### 藍牙連線事件觸發重連（Changes）
+- 新增 src/EdifierTray/Service/ConnectionWatcher.cs：監看選用裝置的 BluetoothDevice.ConnectionStatusChanged，連上時觸發事件
+- DeviceService.cs：新增 NotifyDeviceAvailable()，只在退避等待中才提前重連，並讓下次失敗從最短退避重來；退避表不變
+- TrayHost.cs：啟動、換裝置、掃描後更新監看目標；結束時釋放
+- ServiceTests.cs：新增兩個測試（通知縮短退避、已連線時通知不中斷連線）；dotnet test 107 項通過
+
+### 問題與解法（Problems & Solutions）
+- 直接呼叫 Reconnect() 會在已連線時丟出「連線中斷」把好連線斷掉 → 另設 NotifyDeviceAvailable，用 _backingOff 旗標限定只在等待重試時生效
+
+### 待辦事項（TODO）
+
+### 名稱回退與未配對過濾（Changes）
+- Discovery.cs：新增 IsPairedAsync（BluetoothDevice.DeviceInformation.Pairing.IsPaired；查詢失敗視為已配對，不誤藏）
+- DeviceDirectory.cs：新增 FallbackName、PruneUnpairedAsync；ScanAsync 掃完後移除未配對裝置，選用的被移除就清掉選擇；建構子多一個可注入的 isPaired
+- TrayHost／TrayMenuModel／FlyoutWindow：名稱回退改用選用裝置的名稱或機種，沒有裝置資訊時顯示「Edifier」，不再寫死 ES850NB；啟動時先清掉不再配對的已知裝置
+- Settings.cs：KnownDevice.Model 預設值改為 Edifier
+- 測試：新增 3 項（未配對隱藏、取消配對後移除並回到第一台、回退名稱）；ProtocolTests 的未連線提示改測新行為；dotnet test 110 項通過
+
+### 待辦事項（TODO）
+
+### Python 版同步與 1.0.3（Changes）
+- 新增 src/edifier_reverse/pairing.py（is_paired、ConnectionWatcher，用 bleak 帶進來的 winrt 套件）
+- service.py：notify_device_available（只在退避等待中生效，下次失敗從最短退避重來）
+- devices.py：fallback_name、prune_unpaired，scan 後移除未配對裝置；settings.py：KnownDevice.model 預設 Edifier
+- tray.py／menu.py／flyout.py：名稱回退不再寫死 ES850NB；啟動、換裝置、掃描後更新監看；結束時停止監看
+- 測試：Python 新增 5 項、既有 3 項改寫，pytest 281 通過；C# 110 項通過
+- 版本 1.0.3：pyproject.toml、app.manifest、uv.lock
+
+### 待辦事項（TODO）
+- 事件監看與配對檢查未用 ES850NB 實機驗證（耳機開機／進入範圍時是否即時重連、已配對裝置是否仍列出）
+- 未打 v1.0.3 標籤（打標籤會觸發 Release 建置安裝檔）
+

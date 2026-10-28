@@ -155,12 +155,43 @@ public class DirectoryTests
 {
     static readonly (string, string)[] Two = { ("AA:AA:AA:AA:AA:01", "B1"), ("AA:AA:AA:AA:AA:02", "B2") };
 
-    static (DeviceDirectory dir, List<int> saves) Make(params (string A2dp, string Ble)[] found)
+    static (DeviceDirectory dir, List<int> saves) Make(params (string A2dp, string Ble)[] found) => Make(null, found);
+
+    /// <param name="unpaired">視為沒配對的位址；其餘都視為已配對。</param>
+    static (DeviceDirectory dir, List<int> saves) Make(HashSet<string>? unpaired, params (string A2dp, string Ble)[] found)
     {
         var saves = new List<int>();
         var dir = new DeviceDirectory(new Settings(), _ => saves.Add(1), (t, ct) => Task.FromResult(found.Select(f =>
-            new Discovery.Found(f.A2dp, new Session(2, 16), "ES850NB", f.Ble, -60)).ToList()));
+            new Discovery.Found(f.A2dp, new Session(2, 16), "ES850NB", f.Ble, -60)).ToList()),
+            a => Task.FromResult(!(unpaired?.Contains(a) ?? false)));
         return (dir, saves);
+    }
+
+    [Fact] public async Task Unpaired_devices_found_nearby_are_hidden()
+    {
+        var (d, _) = Make(new HashSet<string> { Two[1].Item1 }, Two);
+        var seen = await d.ScanAsync(TimeSpan.Zero);
+        Assert.Equal(new[] { Two[0].Item1 }, seen.Select(x => x.A2dp));   // 沒配對的連不上，不列出
+        Assert.Equal(new[] { Two[0].Item1 }, d.Devices.Select(x => x.A2dp));
+    }
+
+    [Fact] public async Task A_device_that_is_no_longer_paired_is_dropped_and_the_selection_cleared()
+    {
+        var unpaired = new HashSet<string>();
+        var (d, _) = Make(unpaired, Two);
+        await d.ScanAsync(TimeSpan.Zero);
+        d.Select(Two[1].Item1);
+        unpaired.Add(Two[1].Item1);                                        // 使用者在系統裡移除了配對
+        await d.PruneUnpairedAsync();
+        Assert.Equal(new[] { Two[0].Item1 }, d.Devices.Select(x => x.A2dp));
+        Assert.Equal(Two[0].Item1, d.Current!.A2dp);                       // 選擇回到仍存在的第一台
+    }
+
+    [Fact] public void Fallback_name_uses_the_known_device_not_a_hardcoded_model()
+    {
+        Assert.Equal("Edifier", DeviceDirectory.FallbackName(null));
+        Assert.Equal("MP330", DeviceDirectory.FallbackName(new KnownDevice { A2dp = "A", Model = "MP330" }));
+        Assert.Equal("EDIFIER X", DeviceDirectory.FallbackName(new KnownDevice { A2dp = "A", Model = "MP330", Name = "EDIFIER X" }));
     }
 
     [Fact] public async Task Scan_adds_all_devices_and_does_not_duplicate_on_rescan()

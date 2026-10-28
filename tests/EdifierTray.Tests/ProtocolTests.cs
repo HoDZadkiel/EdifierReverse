@@ -153,7 +153,8 @@ public class UiHelperTests
         Assert.Contains("電量 80%", TrayHost.Tooltip(Conn(1)));
         Assert.Contains("強度 8", TrayHost.Tooltip(Conn(4, 8)));
         Assert.DoesNotContain("強度", TrayHost.Tooltip(Conn(2, 6)));
-        Assert.StartsWith("ES850NB：未連線", TrayHost.Tooltip(new DeviceState()));
+        Assert.StartsWith("Edifier：未連線", TrayHost.Tooltip(new DeviceState()));           // 沒有裝置資訊時不假設是哪個機種
+        Assert.StartsWith("ES850NB：未連線", TrayHost.Tooltip(new DeviceState(), "ES850NB"));  // 有選用裝置時用它的機種／名稱
     }
 }
 

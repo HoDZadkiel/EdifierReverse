@@ -20,7 +20,8 @@ public static class TrayMenuModel
     /// <param name="devices">(位址, 顯示名稱, 是否為目前選用) 的清單。</param>
     public static IReadOnlyList<MenuEntry> Build(DeviceState s, int? volume, bool muted, bool autostart,
                                                  IReadOnlyList<(string A2dp, string Label, bool Selected)>? devices = null,
-                                                 string theme = "system", string language = "zh-TW", bool scanning = false)
+                                                 string theme = "system", string language = "zh-TW", bool scanning = false,
+                                                 string fallbackName = Catalog.GenericModel)
     {
         devices ??= Array.Empty<(string, string, bool)>();
         bool selectable = s.Connected && s.AncSupported;
@@ -33,7 +34,7 @@ public static class TrayMenuModel
         // 標頭用簡短的模式名稱，長名稱（例如英文）會把整個選單撐寬
         var modeName = selectable && s.Anc is not null ? T($"anc.s.{s.Anc.Mode}") : s.AncLabel;
         var detail = s.Connected ? T("m.header_detail", new { b = s.Battery, mode = modeName }) : T("m.not_connected");
-        list.Add(new MenuEntry(EntryKind.Header, s.Name == "" ? "ES850NB" : s.Name, Detail: detail));
+        list.Add(new MenuEntry(EntryKind.Header, s.Name == "" ? fallbackName : s.Name, Detail: detail));
         list.Add(Sep());
 
         list.Add(new MenuEntry(EntryKind.Label, T("m.anc")));

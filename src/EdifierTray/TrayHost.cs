@@ -16,6 +16,7 @@ public sealed class TrayHost : IDisposable
     public Settings Settings { get; }
     public DeviceDirectory? Directory { get; }
     readonly NotifyIcon? _icon;
+    readonly ConnectionWatcher _watcher = new();
     int? _volume;
     bool _muted, _wasConnected, _scanning;
     string _volumeTarget = "";
@@ -42,7 +43,7 @@ public sealed class TrayHost : IDisposable
 
         if (withTray)
         {
-            _icon = new NotifyIcon { Visible = true, Text = Strings.T("t.connecting", new { name = "ES850NB" }) };
+            _icon = new NotifyIcon { Visible = true, Text = Strings.T("t.connecting", new { name = DeviceDirectory.FallbackName(directory?.Current) }) };
             _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) Flyout.Toggle(); };
             _icon.MouseUp += (_, e) =>
             {
@@ -59,11 +60,26 @@ public sealed class TrayHost : IDisposable
         RefreshVolume();
         Render(Service.State);
         Service.Start();
+        if (Directory is not null)
+        {
+            _watcher.Connected += Service.NotifyDeviceAvailable;
+            _ = PruneAndWatchAsync();
+        }
     }
 
-    public static string Tooltip(DeviceState s)
+    /// <summary>啟動時清掉已不再配對的裝置，再開始監看；失敗不影響其他功能。</summary>
+    async Task PruneAndWatchAsync()
     {
-        var name = s.Name == "" ? "ES850NB" : s.Name;
+        try { await Directory!.PruneUnpairedAsync(); }
+        catch (Exception) { }
+        WatchCurrentDevice();
+    }
+
+    void WatchCurrentDevice() => _ = _watcher.WatchAsync(Directory?.Current?.A2dp ?? "");
+
+    public static string Tooltip(DeviceState s, string fallbackName = Catalog.GenericModel)
+    {
+        var name = s.Name == "" ? fallbackName : s.Name;
         if (!s.Connected) return Strings.T("t.disconnected", new { name });
         var anc = s.AncLabel;
         if (s.Anc?.Db is int db && db > 0 && s.Anc.Group is int g
@@ -91,14 +107,16 @@ public sealed class TrayHost : IDisposable
         Render(s);
     }
 
+    string FallbackName => DeviceDirectory.FallbackName(Directory?.Current);
+
     void Render(DeviceState s)
     {
-        Flyout.ApplyState(s, _volume, _muted);
+        Flyout.ApplyState(s, _volume, _muted, FallbackName);
         if (_icon is null) return;
         var old = _icon.Icon;
         using (var bmp = LogoRenderer.Render(32, s.Battery, s.Connected)) _icon.Icon = LogoRenderer.ToIcon(bmp);
         old?.Dispose();
-        _icon.Text = Tooltip(s);
+        _icon.Text = Tooltip(s, FallbackName);
     }
 
     // ---- 外觀、語言、裝置 ----
@@ -123,6 +141,7 @@ public sealed class TrayHost : IDisposable
     public void SelectDevice(string a2dp)
     {
         if (Directory is null || !Directory.Select(a2dp)) return;
+        WatchCurrentDevice();
         Service.Reconnect();
     }
 
@@ -134,6 +153,7 @@ public sealed class TrayHost : IDisposable
         {
             var found = await Directory.ScanAsync(TimeSpan.FromSeconds(6));
             Flyout.ShowMessage(Strings.T("m.found_n", new { n = found.Count }));
+            WatchCurrentDevice();  // 第一次掃到裝置時才有選用裝置可監看
         }
         catch (Exception e) { Flyout.ShowMessage(Strings.T("e.scan_failed", new { err = e.Message })); }
         finally { _scanning = false; }
@@ -151,7 +171,7 @@ public sealed class TrayHost : IDisposable
     public void ShowMenuAt(int x, int y)
     {
         Menu.Populate(TrayMenuModel.Build(Service.State, _volume, _muted, Autostart.IsEnabled(), DeviceRows(),
-                                          Settings.Theme, Strings.Language, _scanning), MenuLogo());
+                                          Settings.Theme, Strings.Language, _scanning, FallbackName), MenuLogo());
         Menu.ToggleAt(x, y);
     }
 
@@ -240,6 +260,7 @@ public sealed class TrayHost : IDisposable
 
     public void Dispose()
     {
+        _watcher.Dispose();
         if (_icon is not null) { _icon.Visible = false; _icon.Dispose(); }
         Menu.Close();
         Flyout.Close();

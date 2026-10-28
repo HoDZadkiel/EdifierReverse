@@ -68,6 +68,7 @@ public sealed class DeviceService
     int _pendingSets;
     CancellationTokenSource? _cooldownCts;
     TaskCompletionSource _interrupt = NewSignal();
+    bool _backingOff, _fastRetry;
 
     public DeviceState State { get; private set; } = new();
     public event Action<DeviceState>? StateChanged;
@@ -116,6 +117,15 @@ public sealed class DeviceService
 
     /// <summary>要求立刻重連（略過退避等待）。</summary>
     public void Reconnect() => _interrupt.TrySetResult();
+
+    /// <summary>藍牙事件通知「裝置已連上電腦」：只在斷線等待重試時才提前重連，並讓下次失敗從最短退避重來
+    /// （事件觸發時 SPP 可能還沒就緒）。已連線或正在連線時忽略，不會中斷健康的連線。</summary>
+    public void NotifyDeviceAvailable()
+    {
+        if (!Volatile.Read(ref _backingOff)) return;
+        Volatile.Write(ref _fastRetry, true);
+        _interrupt.TrySetResult();
+    }
 
     // ---- 狀態 ----
     void Update(Func<DeviceState, DeviceState> change)
@@ -198,8 +208,11 @@ public sealed class DeviceService
                 _client = null;
                 transport?.Dispose();
             }
+            if (Volatile.Read(ref _fastRetry)) { Volatile.Write(ref _fastRetry, false); failures = 0; }
             var delay = _backoff[Math.Min(failures++, _backoff.Length - 1)];
-            await Task.WhenAny(interrupt.Task, Task.Delay(delay, ct));
+            Volatile.Write(ref _backingOff, true);
+            try { await Task.WhenAny(interrupt.Task, Task.Delay(delay, ct)); }
+            finally { Volatile.Write(ref _backingOff, false); }
             if (ct.IsCancellationRequested) break;
         }
     }
