@@ -16,9 +16,11 @@ from typing import Callable, Optional
 from . import autostart as _autostart
 from . import i18n
 from . import settings as S
+from .alerts import HOTKEY_LABELS, HOTKEYS, OsdTracker, next_anc_mode
 from .i18n import tr
 from .logo import make_logo
 from .menu import VOLUME_STEP, build_menu
+from .osd import Osd
 from .service import AMBIENT_MODE, DeviceService, DeviceState, ServiceError
 from .volume import VolumeControl, VolumeError
 
@@ -92,8 +94,10 @@ class TrayApp:
         self.headless = headless
         self._tasks: "queue.Queue[Callable[[], None]]" = queue.Queue()
         self.watcher = None
+        self.tracker = OsdTracker()
+        self.hotkeys = None
         self.runner = ServiceRunner(connector, lambda s: self.post(lambda: self._apply_state(s)))
-        self.root = self.flyout = self.icon = self.menu = None
+        self.root = self.flyout = self.icon = self.menu = self.osd = None
 
     # ---- 執行緒橋接 ----
     def post(self, fn: Callable[[], None]) -> None:
@@ -131,9 +135,10 @@ class TrayApp:
             "mute": self.toggle_mute, "reconnect": lambda: self.runner.service.reconnect(), "quit": self.quit,
         }, theme)
         self.menu = TrayMenu(self.root, lambda i: self.post(lambda: self.on_menu_item(i)), self.flyout.font_face, theme)
+        self.osd = Osd(self.root, theme, self.flyout.font_face)
 
     def _rebuild_ui(self) -> None:
-        for w in (self.flyout, self.menu):
+        for w in (self.flyout, self.menu, self.osd):
             if w is not None:
                 w.win.destroy()
         self._build_ui()
@@ -222,12 +227,14 @@ class TrayApp:
             self.refresh_volume()
         if state.connected and state.name and self.directory is not None and self.directory.current() is not None:
             self.directory.remember_name(self.directory.current().a2dp, state.name)
+        for msg in self.tracker.update(state):
+            self.show_osd(msg)
         self._render(state)
 
     def _render(self, state: Optional[DeviceState] = None) -> None:
         state = state or self.state
         if self.icon is not None:
-            self.icon.icon = make_logo(64, state.battery, state.connected)
+            self.icon.icon = make_logo(64, state.battery, state.connected, number=True)
             self.icon.title = tooltip_text(state, self.fallback_name)
         if self.flyout is not None:
             self.flyout.update(state, self.volume_percent, self.muted, self.fallback_name)
@@ -258,6 +265,10 @@ class TrayApp:
 
         fut.add_done_callback(done)
 
+    def show_osd(self, text: str) -> None:
+        if self.osd is not None:
+            self.osd.show(text)
+
     def _say(self, msg: str) -> None:
         if self.flyout is not None:
             self.flyout.show_message(msg)
@@ -283,6 +294,32 @@ class TrayApp:
             return
         self.refresh_volume()
         self._render()
+
+    # ---- 全域快捷鍵（Ctrl+Alt+…）----
+    def on_hotkey(self, name: str) -> None:
+        if name == "anc":
+            mode = next_anc_mode(self.state)
+            if mode is None:
+                self.show_osd(tr("e.not_connected"))
+            else:
+                self.set_anc(mode)  # 成功後裝置推送新狀態，由 OsdTracker 顯示新模式；冷卻期內 set_anc 會自己略過
+            return
+        if name == "mute":
+            self.toggle_mute()
+        else:
+            self.step_volume(VOLUME_STEP if name == "vol+" else -VOLUME_STEP)
+        if self.volume_percent is None:
+            self.show_osd(tr("e.vol_access"))
+        else:
+            self.show_osd(tr("m.mute") if self.muted else tr("o.volume", n=self.volume_percent))
+
+    def _start_hotkeys(self) -> None:
+        from .hotkeys import HotkeyListener
+
+        self.hotkeys = HotkeyListener(HOTKEYS, lambda n: self.post(lambda: self.on_hotkey(n)))
+        failed = self.hotkeys.start()
+        if failed:
+            self.post(lambda: self.show_osd(tr("o.hotkey_failed", keys=", ".join(HOTKEY_LABELS[k] for k in failed))))
 
     def toggle_autostart(self) -> None:
         try:
@@ -334,6 +371,8 @@ class TrayApp:
             self.icon.stop()
         if self.watcher is not None:
             self.watcher.stop()
+        if self.hotkeys is not None:
+            self.hotkeys.stop()
         if self.root is not None:
             self.root.quit()
 
@@ -356,6 +395,7 @@ class TrayApp:
                                tr("t.connecting", name=self.fallback_name), menu,
                                lambda x, y: self.post(lambda: self.show_menu_at(x, y)))
         self.runner.start()
+        self._start_hotkeys()
         if self.directory is not None:
             self.runner.submit(self._prune_and_watch())
         self.refresh_volume()

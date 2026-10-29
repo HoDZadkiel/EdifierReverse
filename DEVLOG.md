@@ -732,3 +732,40 @@
 - 事件監看與配對檢查未用 ES850NB 實機驗證（耳機開機／進入範圍時是否即時重連、已配對裝置是否仍列出）
 - 未打 v1.0.3 標籤（打標籤會觸發 Release 建置安裝檔）
 
+
+## 2026-10-29
+
+### 待辦事項（TODO）
+- 新增 OSD 顯示功能：顯示電量告警與模式切換
+- 模式切換快捷鍵
+- 音量切換快捷鍵
+- 右下角托盤圖示顯示電量數值
+
+### 完成當日四項待辦：OSD、快捷鍵、托盤電量數字（Changes）
+- 新增 src/edifier_reverse/alerts.py、src/EdifierTray/Service/Alerts.cs：OsdTracker（電量 <=20% 告警一次、回到 >20% 才再武裝；模式改變含耳機按鍵切換；重連後第一筆不算改變）、next_anc_mode／NextAncMode（輪替、未驗證 group 回 None）、快捷鍵表
+- 新增 osd.py／Ui/OsdWindow.xaml(.cs)：工作區下方置中提示條，1.8 秒自動消失，不搶焦點、滑鼠穿透
+- 新增 hotkeys.py／Service/HotkeyListener.cs：RegisterHotKey 全域快捷鍵，Ctrl+Alt+A 輪替降噪、Ctrl+Alt+↑／↓ 音量 ±10、Ctrl+Alt+0 靜音；註冊失敗會在 OSD 提示
+- logo.py／LogoRenderer.cs：新增 number 參數，托盤圖示連線時以電量數字取代耳機輪廓（面板與選單的圖示不變）
+- tray.py／TrayHost.cs：接上 OsdTracker、快捷鍵、OSD；strings.json 四語新增 o.low_battery、o.volume、o.hotkey_failed
+- README.md：功能列表補上電量數字、OSD 與快捷鍵
+- 測試：pytest 299 通過（+18）、dotnet test 124 通過（+14）；數字圖示已渲染成圖目視確認 16／32px 可讀
+
+### 問題與解法（Problems & Solutions）
+- Ctrl+Alt+M 在這台機器已被其他程式佔用 → 靜音改 Ctrl+Alt+0；實測 0／S／K／U／↑ 的 RegisterHotKey 可註冊且回呼正確觸發
+- 設 EDIFIER_BUILD_ROOT 後 dotnet 因專案內舊的 obj 產生碼重複定義而編譯失敗 → 本次不設該變數，沿用專案內 bin/obj
+
+### 待辦事項（TODO）
+- OSD 視窗與快捷鍵未在實機（接 ES850NB、長時間常駐）驗證；C# 版 OSD 只有視窗層級的自動化測試，未看過實際畫面
+- 快捷鍵目前固定、無法自訂；其他程式佔用時只提示、不能改鍵
+- 未打包安裝檔、未升版本號、未 push
+
+### 靜音快捷鍵加入數字鍵盤 0、安裝 1.0.4（Changes）
+- 快捷鍵表值改為虛擬鍵碼元組：靜音同時註冊主鍵盤 0 與數字鍵盤 0（0x60）；一個鍵都註冊不了才算失敗（alerts.py、Alerts.cs、hotkeys.py、HotkeyListener.cs、兩邊測試、README）
+- 版本升 1.0.4（pyproject.toml、uv.lock、app.manifest）；本機 build-installer 打包並 /SILENT 安裝，供使用者試用
+
+### 問題與解法（Problems & Solutions）
+- 數字鍵盤 0 的虛擬鍵碼與主鍵盤 0 不同，RegisterHotKey 要分別註冊
+- 專案內 src/EdifierTray 的 obj/Debug 殘留會讓設了 EDIFIER_BUILD_ROOT 的建置重複定義失敗 → 打包前刪掉 bin/Debug、obj/Debug
+
+### 待辦事項（TODO）
+- 使用者試用 1.0.4 的回饋；未打標籤、未 push

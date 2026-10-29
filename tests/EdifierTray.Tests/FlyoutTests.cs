@@ -96,6 +96,21 @@ public class FlyoutTests
             menu.Populate(TrayMenuModel.Build(new DeviceState(), null, false, false), null);
             Assert.False(FindButtons(menu.Content).First(b => (string)b.Tag == "anc:2").IsEnabled);  // 未連線：停用
             menu.Close();
+
+            // ---- OSD（同一個 Application 內接著測） ----
+            var osd = new OsdWindow();
+            Assert.False(osd.IsShowing);
+            osd.ShowOsd("電量偏低：20%");
+            Assert.True(osd.IsShowing);
+            Assert.Equal("電量偏低：20%", osd.Text);
+            var area = System.Windows.SystemParameters.WorkArea;
+            Assert.InRange(osd.Left + osd.ActualWidth / 2, area.Left + area.Width / 2 - 1, area.Left + area.Width / 2 + 1);  // 水平置中
+            Assert.True(osd.Top + osd.ActualHeight < area.Bottom);                                                          // 在工作區底緣之上
+            osd.ShowOsd("音量 60%");
+            Assert.Equal("音量 60%", osd.Text);                  // 連續顯示是換字，不是疊視窗
+            osd.HideOsd();
+            Assert.False(osd.IsShowing);
+            osd.Close();
         });
     }
 }

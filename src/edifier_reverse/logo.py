@@ -16,8 +16,21 @@ def battery_color(battery: Optional[int], connected: bool) -> RGB:
     return (255, 99, 97)
 
 
-def make_logo(size: int = 64, battery: Optional[int] = None, connected: bool = True):
-    """回傳 RGBA 的 PIL Image。未連線時整體變灰、電量環只畫底軌。"""
+def _digit_font(px: int):
+    """電量數字用的粗體字型；找不到系統字型就退回 PIL 內建（較醜但至少看得到數字）。"""
+    from PIL import ImageFont
+
+    for name in ("segoeuib.ttf", "arialbd.ttf"):
+        try:
+            return ImageFont.truetype(name, px)
+        except OSError:
+            pass
+    return ImageFont.load_default(px)
+
+
+def make_logo(size: int = 64, battery: Optional[int] = None, connected: bool = True, number: bool = False):
+    """回傳 RGBA 的 PIL Image。未連線時整體變灰、電量環只畫底軌。
+    number=True 且已連線有電量時，圓盤中央畫電量數字取代耳機輪廓（托盤小圖示用）。"""
     from PIL import Image, ImageDraw
 
     s = 4
@@ -40,6 +53,10 @@ def make_logo(size: int = 64, battery: Optional[int] = None, connected: bool = T
             d.arc(box(5, 5, 95, 95), -90, -90 + sweep, fill=ring + (255,), width=w)
 
     fg = (255, 255, 255, 255) if connected else (170, 170, 170, 255)
+    if number and connected and battery is not None:
+        text = str(max(0, min(100, battery)))
+        d.text((n / 2, n / 2), text, font=_digit_font(round(n * (0.4 if len(text) == 3 else 0.55))), fill=fg, anchor="mm")
+        return img.resize((size, size), Image.LANCZOS)
     d.arc(box(25, 24, 75, 74), 180, 360, fill=fg, width=max(1, round(6 * u)))   # 頭帶
     d.rounded_rectangle(box(21, 48, 35, 72), radius=5 * u, fill=fg)             # 左耳罩
     d.rounded_rectangle(box(65, 48, 79, 72), radius=5 * u, fill=fg)             # 右耳罩

@@ -145,6 +145,27 @@ public class UiHelperTests
         Assert.Equal(0, bmp.GetPixel(0, 0).A);
     }
 
+    [Fact] public void Tray_logo_with_number_draws_digits_instead_of_the_headphone_and_only_when_connected()
+    {
+        static byte[] Pixels(System.Drawing.Bitmap b)
+        {
+            var list = new List<byte>();
+            for (int y = 0; y < b.Height; y++) for (int x = 0; x < b.Width; x++) { var c = b.GetPixel(x, y); list.AddRange(new[] { c.A, c.R, c.G, c.B }); }
+            return list.ToArray();
+        }
+        using var plain = LogoRenderer.Render(64, 50, true);
+        using var num = LogoRenderer.Render(64, 50, true, number: true);
+        Assert.NotEqual(Pixels(plain), Pixels(num));
+        // 耳機輪廓的左耳罩在 (17, 40)；數字模式下那裡是圓盤底色
+        Assert.Equal(255, plain.GetPixel(17, 40).R);
+        Assert.NotEqual(255, num.GetPixel(17, 40).R);
+        using var offNum = LogoRenderer.Render(64, 50, false, number: true);
+        using var off = LogoRenderer.Render(64, 50, false);
+        Assert.Equal(Pixels(off), Pixels(offNum));           // 未連線維持耳機
+        using var full = LogoRenderer.Render(64, 100, true, number: true);
+        Assert.Equal(64, full.Width);                        // 三位數也畫得下
+    }
+
     static DeviceState Conn(int mode, int? db = null) =>
         new(true, "EDIFIER ES850NB", "1.0.1", 80, new AncState(16, mode, db));
 

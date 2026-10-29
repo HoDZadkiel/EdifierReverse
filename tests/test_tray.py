@@ -266,3 +266,82 @@ def test_clicking_the_version_opens_the_github_repo(tk_root, monkeypatch):
     f.version_lbl.event_generate("<ButtonRelease-1>")
     f.win.update()
     assert opened == ["https://github.com/HoDZadkiel/EdifierReverse"]
+
+
+# ---- 托盤圖示的電量數字、OSD、快捷鍵 ----
+def test_tray_logo_with_number_draws_digits_instead_of_the_headphone_and_only_when_connected():
+    plain, num = make_logo(64, 50, True), make_logo(64, 50, True, number=True)
+    assert plain.tobytes() != num.tobytes()
+    # 耳機輪廓的左耳罩在 (17, 40)；數字模式下那裡是圓盤底色
+    assert plain.getpixel((17, 40))[:3] == (255, 255, 255) and num.getpixel((17, 40))[:3] != (255, 255, 255)
+    assert make_logo(64, 50, False, number=True).tobytes() == make_logo(64, 50, False).tobytes()  # 未連線維持耳機
+    assert make_logo(64, None, True, number=True).tobytes() == make_logo(64, None, True).tobytes()
+    assert make_logo(64, 100, True, number=True).size == (64, 64)  # 三位數也畫得下
+
+
+def test_osd_window_shows_text_then_hides_itself(tk_root):
+    from edifier_reverse.osd import Osd
+
+    osd = Osd(tk_root, DARK, "Segoe UI")
+    osd.show("電量偏低：20%")
+    tk_root.update()
+    assert osd.win.winfo_viewable() and osd.label.cget("text") == "電量偏低：20%"
+    osd.hide()
+    tk_root.update()
+    assert not osd.win.winfo_viewable()
+
+
+class RecordingOsd:
+    def __init__(self):
+        self.shown = []
+
+    def show(self, text):
+        self.shown.append(text)
+
+
+def test_hotkeys_drive_volume_and_mode_and_report_on_the_osd():
+    ep = FakeEndpoint()
+
+    async def connector():
+        d = SimulatedDevice(SESSION, push_anc=True)
+        d.state[C.ANC_QUERY] = bytes([16, 1])
+        return d, SESSION
+
+    app = TrayApp(connector, VolumeControl("X", opener=lambda n: ep), headless=True)
+    app.osd = RecordingOsd()
+    app.runner.start()
+    try:
+        assert wait_for(lambda: app.state.connected)
+        app.refresh_volume()
+        app.on_hotkey("vol+")
+        assert ep.scalar == pytest.approx(0.6) and app.osd.shown[-1] == "音量 60%"
+        app.on_hotkey("vol-")
+        app.on_hotkey("vol-")
+        assert ep.scalar == pytest.approx(0.4) and app.osd.shown[-1] == "音量 40%"
+        app.on_hotkey("mute")
+        assert ep.mute == 1 and app.osd.shown[-1] == "靜音"
+        app.on_hotkey("mute")
+        assert ep.mute == 0 and app.osd.shown[-1] == "音量 40%"
+
+        app.on_hotkey("anc")  # 模式 1 -> 2
+        assert wait_for(lambda: app.state.anc.mode == 2)
+    finally:
+        app.runner.stop()
+
+
+def test_mode_hotkey_while_disconnected_says_so_on_the_osd():
+    async def connector():
+        raise ConnectionError("no device")
+
+    app = TrayApp(connector, VolumeControl("X", opener=lambda n: FakeEndpoint()), headless=True)
+    app.osd = RecordingOsd()
+    app.on_hotkey("anc")
+    assert app.osd.shown == ["尚未連上裝置"]
+
+
+def test_apply_state_shows_osd_for_low_battery_and_mode_changes():
+    app = TrayApp(None, VolumeControl("X", opener=lambda n: FakeEndpoint()), headless=True)
+    app.osd = RecordingOsd()
+    app._apply_state(connected(battery=50, mode=1))
+    app._apply_state(connected(battery=19, mode=3))
+    assert app.osd.shown == ["電量偏低：19%", "降噪：防風噪"]

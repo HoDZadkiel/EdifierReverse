@@ -16,7 +16,8 @@ public static class LogoRenderer
         return Color.FromArgb(255, 99, 97);
     }
 
-    public static Bitmap Render(int size, int? battery, bool connected)
+    /// <param name="number">true 且已連線有電量時，圓盤中央畫電量數字取代耳機輪廓（托盤小圖示用）。</param>
+    public static Bitmap Render(int size, int? battery, bool connected, bool number = false)
     {
         var bmp = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(bmp);
@@ -35,6 +36,16 @@ public static class LogoRenderer
         }
 
         var fg = connected ? Color.White : Color.FromArgb(170, 170, 170);
+        if (number && connected && battery is int level)
+        {
+            var text = Math.Clamp(level, 0, 100).ToString();
+            using var font = new Font("Segoe UI", size * (text.Length == 3 ? 0.4f : 0.55f), FontStyle.Bold, GraphicsUnit.Pixel);
+            using var digits = new SolidBrush(fg);
+            using var center = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+            g.DrawString(text, font, digits, new RectangleF(0, 0, size, size), center);
+            return bmp;
+        }
         using var band = new Pen(fg, Math.Max(1f, 6f * u));
         g.DrawArc(band, R(25, 24, 75, 74), 180, 180);       // 頭帶
         using var brush = new SolidBrush(fg);

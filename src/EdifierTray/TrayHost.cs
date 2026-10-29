@@ -12,11 +12,14 @@ public sealed class TrayHost : IDisposable
     public DeviceService Service { get; }
     public VolumeControl Volume { get; }
     public FlyoutWindow Flyout { get; }
+    public OsdWindow Osd { get; } = new();
     public TrayMenuWindow Menu { get; }
     public Settings Settings { get; }
     public DeviceDirectory? Directory { get; }
     readonly NotifyIcon? _icon;
     readonly ConnectionWatcher _watcher = new();
+    readonly OsdTracker _tracker = new();
+    HotkeyListener? _hotkeys;
     int? _volume;
     bool _muted, _wasConnected, _scanning;
     string _volumeTarget = "";
@@ -60,6 +63,7 @@ public sealed class TrayHost : IDisposable
         RefreshVolume();
         Render(Service.State);
         Service.Start();
+        if (_icon is not null) StartHotkeys();
         if (Directory is not null)
         {
             _watcher.Connected += Service.NotifyDeviceAvailable;
@@ -76,6 +80,30 @@ public sealed class TrayHost : IDisposable
     }
 
     void WatchCurrentDevice() => _ = _watcher.WatchAsync(Directory?.Current?.A2dp ?? "");
+
+    void StartHotkeys()
+    {
+        _hotkeys = new HotkeyListener(Hotkeys.Keys);
+        _hotkeys.Pressed += OnHotkey;
+        if (_hotkeys.Failed.Count > 0)
+            Osd.ShowOsd(Strings.T("o.hotkey_failed", new { keys = string.Join(", ", _hotkeys.Failed.Select(k => Hotkeys.Labels[k])) }));
+    }
+
+    /// <summary>全域快捷鍵（Ctrl+Alt+…）：輪替降噪模式、音量加減、靜音；結果顯示在 OSD。</summary>
+    public void OnHotkey(string name)
+    {
+        if (name == "anc")
+        {
+            if (Hotkeys.NextAncMode(Service.State) is int mode) _ = RunAnc(mode, null);  // 成功後裝置推送新狀態，由 OsdTracker 顯示新模式；冷卻期內 RunAnc 會自己略過
+            else Osd.ShowOsd(Strings.T("e.not_connected"));
+            return;
+        }
+        if (name == "mute") ToggleMute();
+        else StepVolume(name == "vol+" ? +TrayMenuModel.VolumeStep : -TrayMenuModel.VolumeStep);
+        RefreshVolume();
+        Osd.ShowOsd(_volume is not int v ? Strings.T("e.vol_access")
+                    : _muted ? Strings.T("m.mute") : Strings.T("o.volume", new { n = v }));
+    }
 
     public static string Tooltip(DeviceState s, string fallbackName = Catalog.GenericModel)
     {
@@ -104,6 +132,7 @@ public sealed class TrayHost : IDisposable
             RefreshVolume();
         }
         _wasConnected = s.Connected;
+        foreach (var msg in _tracker.Update(s)) Osd.ShowOsd(msg);
         Render(s);
     }
 
@@ -114,7 +143,7 @@ public sealed class TrayHost : IDisposable
         Flyout.ApplyState(s, _volume, _muted, FallbackName);
         if (_icon is null) return;
         var old = _icon.Icon;
-        using (var bmp = LogoRenderer.Render(32, s.Battery, s.Connected)) _icon.Icon = LogoRenderer.ToIcon(bmp);
+        using (var bmp = LogoRenderer.Render(32, s.Battery, s.Connected, number: true)) _icon.Icon = LogoRenderer.ToIcon(bmp);
         old?.Dispose();
         _icon.Text = Tooltip(s, FallbackName);
     }
@@ -261,9 +290,11 @@ public sealed class TrayHost : IDisposable
     public void Dispose()
     {
         _watcher.Dispose();
+        _hotkeys?.Dispose();
         if (_icon is not null) { _icon.Visible = false; _icon.Dispose(); }
         Menu.Close();
         Flyout.Close();
+        Osd.Close();
     }
 
     public int? CurrentVolume => _volume;
