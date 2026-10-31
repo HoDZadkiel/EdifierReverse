@@ -1,6 +1,7 @@
-"""命令列：scan（掃描）、probe（實機只讀探測）、sim（離線自測）、status／anc（裝置服務）。
+"""命令列：devices／scan（掃描）、probe（實機只讀探測）、sim（離線自測）、status／anc（裝置服務）、
+power-save（省電模式）、tray（托盤）。
 
-probe 不送任何設定類指令；唯一會改變裝置狀態的是 anc 子命令（0xC1，經節流）。"""
+probe 不送任何設定類指令；會改變裝置狀態的只有 anc（0xC1，經節流）與 power-save --set --yes（0xB2）。"""
 import argparse
 import asyncio
 import json
@@ -39,7 +40,7 @@ def resolve_transport(model: str, transport: str):
         raise PlanError(f"{model} 在產品表中沒有 SPP UUID，官方 App 對它只走 BLE")
     warnings = []
     if t == "ble" and profile.spp:
-        warnings.append(f"官方 App 對 {model} 走 SPP；BLE GATT 這條路只是產品表有列，未必可用")
+        warnings.append(f"官方 App 對 {model} 走 SPP；BLE GATT 只在 ES850NB 實機驗證過可用，其他機種未驗證")
     return t, warnings
 
 

@@ -6,7 +6,7 @@ public enum EntryKind { Header, Label, Item, Separator, Segmented, Section }
 
 /// <param name="Glyph">Segoe Fluent Icons 的字元（空字串＝沒有圖示）。</param>
 /// <param name="Detail">右側的次要文字，例如目前音量。</param>
-/// <param name="Id">動作代號：anc:1..5、mute、vol+、vol-、dev:&lt;位址&gt;、out:&lt;端點代號&gt;、rescan、theme:system|light|dark、lang:&lt;代碼&gt;、open、reconnect、autostart、quit。</param>
+/// <param name="Id">動作代號：sec:&lt;大項&gt;、anc:1..5、mute、vol+、vol-、dev:&lt;位址&gt;、out:&lt;端點代號&gt;、rescan、powercheck、powersave、keepawake、theme:system|light|dark、lang:&lt;代碼&gt;、open、reconnect、autostart、quit。</param>
 /// <param name="Options">分段按鈕：(代號, 文字, 是否選中)。</param>
 /// <param name="Children">Section 的子選單項目：滑鼠移到大項上時從右側彈出。</param>
 public sealed record MenuEntry(EntryKind Kind, string Text = "", string Glyph = "", string Detail = "",
@@ -14,7 +14,7 @@ public sealed record MenuEntry(EntryKind Kind, string Text = "", string Glyph = 
                                IReadOnlyList<(string Id, string Text, bool Selected)>? Options = null,
                                IReadOnlyList<MenuEntry>? Children = null);
 
-/// <summary>右鍵選單的內容。純資料，不碰 UI，方便測試；TrayMenuWindow 負責畫出來。項目與代號和 Python 版（menu.py）一致。</summary>
+/// <summary>右鍵選單的內容。純資料，不碰 UI，方便測試；TrayMenuWindow 負責畫出來。兩版共有的項目代號與 Python 版（menu.py）相同；階層子選單、輸出裝置、電源只有這一版。</summary>
 public static class TrayMenuModel
 {
     public const int VolumeStep = 10;
@@ -75,7 +75,7 @@ public static class TrayMenuModel
                     outputs.Select(o => new MenuEntry(EntryKind.Item, AudioOutputs.Shorten(o.Name), "", Checked: o.IsDefault, Id: $"out:{o.Id}")).ToList());
 
         // 電源：目前裝置的防自動關機。裝置有省電模式就顯示目前狀態、可重新檢查、可關閉（原生做法）；
-        // 沒有（查詢沒回應）才退回「保持開機」（持續送出聽不到的訊號）
+        // 沒有（查詢沒回應）才退回「保持開機」（定期送出一小段聽不到的訊號）
         if (s.PowerSave is bool ps)
         {
             string state = ps ? T("m.on") : T("m.off");

@@ -1,6 +1,6 @@
 """裝置回應的 payload 解析（已解 XOR 的 payload）。格式見 docs/protocol-commands.md。
 
-靜態分析結果，尚未實機驗證。
+解析規則來自靜態分析（ES850NB 實機驗證見 docs/findings.md 第 0 節；未列出的部分仍是靜態分析）。
 """
 from dataclasses import dataclass
 from typing import Optional

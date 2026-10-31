@@ -10,7 +10,7 @@ public sealed class KnownDevice
     [JsonPropertyName("version")] public int Version { get; set; } = 2;
     [JsonPropertyName("encryption")] public int Encryption { get; set; }
     [JsonPropertyName("name")] public string Name { get; set; } = "";   // 連上後由 0xC9 取得
-    [JsonPropertyName("keepAwake")] public bool KeepAwake { get; set; }   // 持續送出聽不到的訊號，防止裝置因無音訊而自動關機
+    [JsonPropertyName("keepAwake")] public bool KeepAwake { get; set; }   // 定期送出一小段聽不到的訊號（見 KeepAwake），防止裝置因無音訊而自動關機
     [JsonPropertyName("model")] public string Model { get; set; } = "Edifier";  // 辨識出的機種（目錄名稱）；不在目錄的為 "Edifier"
 
     /// <summary>位址後四碼，用來區分同型號的多台裝置。</summary>

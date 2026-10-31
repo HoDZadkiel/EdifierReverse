@@ -1,4 +1,4 @@
-"""EQ 相關結構。格式見 docs/protocol-commands.md（靜態分析，尚未實機驗證）。
+"""EQ 相關結構。格式見 docs/protocol-commands.md（ES850NB 的 eqIndex 8 已實機驗證，其他排列仍是靜態分析）。
 
 負增益的編碼方式未知：解碼保留原始的 0–255，編碼時只做 & 0xFF。
 """

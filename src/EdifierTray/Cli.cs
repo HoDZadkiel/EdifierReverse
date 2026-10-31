@@ -12,8 +12,14 @@ namespace EdifierTray;
 /// 命令列模式（驗證與自動化用）：
 ///   --cli status                    連線並印出名稱、韌體、電量、ANC（只讀）
 ///   --cli anc N [db]                切換 ANC（會改變耳機狀態）
-///   --demo-shot 路徑 [dark|light]   用範例資料顯示面板並截圖
-///   --live-ui 目錄                  連真的耳機，程式化操作面板元件並截圖，最後還原
+///   --cli devices                   掃描並列出附近的 Edifier 裝置（只讀）
+///   --demo-shot 路徑 [dark|light] [cooling] [語言[:mp330]]   用範例資料把面板渲染成圖
+///   --menu-shot 路徑 [dark|light] [ok|off|muted|cooling|right] [語言]   用範例資料把右鍵選單與子選單渲染成圖
+///   --cold-toggle 路徑              重現第一次點托盤圖示（視窗從未顯示過），把面板渲染成圖
+///   --live-ui 目錄                  連真的耳機，程式化操作面板元件並把面板渲染成圖，最後還原
+///   --live-menu                     連真的耳機，從右鍵選單點各項目驗證，最後還原
+///   --live-rapid                    連真的耳機，快速連按降噪磚塊驗證冷卻期，最後還原
+/// 驗證畫面一律把元素本身渲染成圖，不截螢幕（會抓到螢幕上的其他內容）；--menu-shot 只比對選單區域的像素變化，不存檔。
 /// </summary>
 public static class Cli
 {
@@ -80,17 +86,6 @@ public static class Cli
     }
 
     // ---- 截圖 ----
-    static void Screenshot(Window w, string path)
-    {
-        var src = PresentationSource.FromVisual(w);
-        var m = src.CompositionTarget.TransformToDevice;
-        int x = (int)(w.Left * m.M11) - 8, y = (int)(w.Top * m.M22) - 8;
-        int cw = (int)(w.ActualWidth * m.M11) + 16, ch = (int)(w.ActualHeight * m.M22) + 16;
-        using var bmp = new Bitmap(cw, ch);
-        using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(x, y, 0, 0, new System.Drawing.Size(cw, ch));
-        bmp.Save(path);
-    }
-
     static Bitmap Grab(Window w)
     {
         var m = PresentationSource.FromVisual(w).CompositionTarget.TransformToDevice;
@@ -148,7 +143,7 @@ public static class Cli
         host.Flyout.ApplyState(new DeviceState(true, "EDIFIER ES850NB", "1.0.1", 16, new AncState(16, 1)), 50, false);
         host.Flyout.Toggle();
         await Task.Delay(900);
-        Screenshot(host.Flyout, path);
+        RenderElement((FrameworkElement)host.Flyout.Content, path, Theme.IsDark() ? System.Windows.Media.Color.FromRgb(32, 32, 32) : System.Windows.Media.Color.FromRgb(243, 243, 243));
         Out($"第一次 Toggle 成功，視窗可見={host.Flyout.IsVisible}");
         host.Flyout.Toggle();
         Out($"再 Toggle 後可見={host.Flyout.IsVisible}");
@@ -323,7 +318,7 @@ public static class Cli
             await Task.Delay(1500);
             f.Show(); f.HideFlyout();
             f.ShowFlyout(); await Task.Delay(900);
-            Screenshot(f, Path.Combine(dir, "cs_1_open.png"));
+            RenderElement((FrameworkElement)f.Content, Path.Combine(dir, "cs_1_open.png"), Theme.IsDark() ? System.Windows.Media.Color.FromRgb(32, 32, 32) : System.Windows.Media.Color.FromRgb(243, 243, 243));
             Out($"初始：{host.Service.State.AncLabel}  電量 {host.Service.State.Battery}%  音量 {host.CurrentVolume}");
             v0 = host.CurrentVolume;
 
@@ -334,7 +329,7 @@ public static class Cli
             Out($"環境音強度拖到 9：{host.Service.State.AncLabel} 強度 {host.Service.State.Anc?.Db}");
             f.SimulateVolume(60); await Task.Delay(500);
             Out($"音量拖到 60：Windows 讀回 {host.Volume.Get()}");
-            Screenshot(f, Path.Combine(dir, "cs_2_changed.png"));
+            RenderElement((FrameworkElement)f.Content, Path.Combine(dir, "cs_2_changed.png"), Theme.IsDark() ? System.Windows.Media.Color.FromRgb(32, 32, 32) : System.Windows.Media.Color.FromRgb(243, 243, 243));
             return 0;
         }
         finally

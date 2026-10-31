@@ -189,7 +189,7 @@ class TrayApp:
     def fallback_name(self) -> str:
         from .devices import DeviceDirectory
 
-        return DeviceDirectory.fallback_name(self.directory.current() if self.directory is not None else None)
+        return DeviceDirectory.fallback_name(self.directory.controlled() if self.directory is not None else None)
 
     def rescan_devices(self) -> None:
         if self.directory is None or self.scanning:
@@ -225,8 +225,8 @@ class TrayApp:
         if state.connected != was:  # 連上／斷線時重選端點：連上用耳機端點，斷線改用備援的預設輸出
             self.volume.reset()
             self.refresh_volume()
-        if state.connected and state.name and self.directory is not None and self.directory.current() is not None:
-            self.directory.remember_name(self.directory.current().a2dp, state.name)
+        if state.connected and state.name and self.directory is not None and self.directory.controlled() is not None:
+            self.directory.remember_name(self.directory.controlled().a2dp, state.name)
         for msg in self.tracker.update(state):
             self.show_osd(msg)
         self._render(state)

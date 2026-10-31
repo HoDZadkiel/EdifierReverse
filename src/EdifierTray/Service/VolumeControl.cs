@@ -10,7 +10,8 @@ public interface IEndpoint
 
 /// <summary>
 /// 耳機音量：走 Windows 音訊端點（NAudio），不是 Edifier 協定（耳機對協定的音量查詢沒有回應）。
-/// 只調整名稱含 ES850NB 的作用中「播放」端點，排除 Hands-Free（通話用）；不動預設輸出裝置。
+/// 只調整目前連線裝置的作用中「播放」端點（名稱含裝置名稱，見 <see cref="SetTarget"/>），排除 Hands-Free（通話用）；
+/// 找不到時退回系統預設輸出；不改預設輸出裝置。
 /// 端點會快取；操作失敗（例如耳機斷線後端點失效）會重新尋找並重試一次。
 /// </summary>
 public sealed class VolumeControl

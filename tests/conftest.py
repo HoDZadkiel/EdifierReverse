@@ -1,3 +1,4 @@
+import gc
 import time
 
 import pytest
@@ -27,3 +28,8 @@ def tk_root():
     root.withdraw()
     yield root
     root.destroy()
+    # Tk 物件（根視窗、圖片、字型）常在循環參照裡，要等垃圾回收才釋放。若回收剛好發生在別的執行緒
+    # （例如之後測試的 asyncio executor），Tcl 會因「被錯的執行緒刪除」直接讓直譯器崩潰（0x80000003）。
+    # 所以在主執行緒當場回收掉。
+    del root
+    gc.collect()

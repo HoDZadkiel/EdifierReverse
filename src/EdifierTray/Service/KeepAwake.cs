@@ -4,15 +4,19 @@ using NAudio.Wave;
 namespace EdifierTray.Service;
 
 /// <summary>
-/// 防止喇叭／耳機因為一段時間沒有播放音訊而自動關機：對指定裝置的播放端點持續送出一個極小的低頻訊號
+/// 防止喇叭／耳機因為一段時間沒有播放音訊而自動關機：對指定裝置的播放端點每隔一段時間送出一小段極小的低頻訊號
 /// （約 -50 dBFS、25 Hz，喇叭重現不出來所以聽不到）。不碰裝置本身的設定，也不走 Edifier 協定，所以所有機種通用。
+/// 只在脈衝期間開著串流，其餘時間關閉（不持續播放，沒充電時不會多耗電）；間隔要小於裝置的待機時間（官方說明 15 分鐘）。
 /// 這是推測：裝置的韌體是否把這種訊號當成「有音訊」沒有保證，要實際放著超過它的待機時間才知道。
-/// 每次呼叫 <see cref="Reconcile"/> 讓執行中的串流與「想保持開機的裝置」一致：裝置的端點出現就開始送，消失（斷線）就停掉。
+/// 每次呼叫 <see cref="Reconcile"/> 讓執行中的脈衝與「想保持開機的裝置」一致：裝置的端點出現才開始，不再想保持開機就停掉；
+/// 開始之後裝置斷線，脈衝仍在，只是每次找不到端點就略過，重新連上後自動接續。
 /// </summary>
 public sealed class KeepAwake : IDisposable
 {
     public const float Amplitude = 0.003f;   // 約 -50 dBFS
     public const float Frequency = 25f;      // Hz，低於小喇叭能重現的範圍
+    public static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);   // 兩次脈衝的間隔，要小於裝置的待機時間（15 分鐘）
+    public static readonly TimeSpan Burst = TimeSpan.FromSeconds(5);      // 每次脈衝長度，要夠藍牙串流起來並被韌體偵測到（未驗證）
 
     readonly Func<string, IDisposable?> _start;
     readonly Dictionary<string, IDisposable> _running = new(StringComparer.OrdinalIgnoreCase);
@@ -94,15 +98,61 @@ public sealed class KeepAwake : IDisposable
         public void Dispose() { _out.Dispose(); _device.Dispose(); }
     }
 
+    /// <summary>每隔 <c>every</c> 開一次串流、開著 <c>burst</c> 再關掉；第一次立刻開。Dispose 時停止並關掉進行中的串流。</summary>
+    public sealed class Pulse : IDisposable
+    {
+        readonly CancellationTokenSource _cts = new();
+
+        public Pulse(Func<IDisposable?> open, TimeSpan every, TimeSpan burst)
+        {
+            if (burst <= TimeSpan.Zero || burst >= every) throw new ArgumentOutOfRangeException(nameof(burst), "脈衝長度必須大於 0 且小於間隔");
+            _ = Run(open, every, burst, _cts.Token);
+        }
+
+        static async Task Run(Func<IDisposable?> open, TimeSpan every, TimeSpan burst, CancellationToken ct)
+        {
+            try
+            {
+                while (true)
+                {
+                    IDisposable? stream = null;
+                    try
+                    {
+                        stream = open();   // 端點暫時不在或被獨占：略過這次，下個間隔再試
+                        await Task.Delay(burst, ct);
+                    }
+                    catch (Exception e) when (e is not OperationCanceledException) { }
+                    finally { try { stream?.Dispose(); } catch (Exception) { } }
+                    await Task.Delay(every - burst, ct);
+                }
+            }
+            catch (OperationCanceledException) { }
+        }
+
+        public void Dispose() => _cts.Cancel();
+    }
+
     static IDisposable? StartStream(string namePart)
+    {
+        using (var probe = FindEndpoint(namePart))
+            if (probe is null) return null;   // 端點不在（裝置沒連上）：讓 Reconcile 下次再試
+        return new Pulse(() => FindEndpoint(namePart) is { } d ? OpenStream(d) : null, Interval, Burst);
+    }
+
+    static MMDevice? FindEndpoint(string namePart)
     {
         using var enumerator = new MMDeviceEnumerator();
         foreach (var d in enumerator.EnumerateAudioEndPoints(DataFlow.Render, NAudio.CoreAudioApi.DeviceState.Active))
         {
-            if (!d.FriendlyName.Contains(namePart, StringComparison.OrdinalIgnoreCase) || !AudioOutputs.IsListable(d.FriendlyName)) { d.Dispose(); continue; }
-            try { return new Stream(d); }
-            catch { d.Dispose(); throw; }
+            if (d.FriendlyName.Contains(namePart, StringComparison.OrdinalIgnoreCase) && AudioOutputs.IsListable(d.FriendlyName)) return d;
+            d.Dispose();
         }
         return null;
+    }
+
+    static Stream OpenStream(MMDevice d)
+    {
+        try { return new Stream(d); }
+        catch { d.Dispose(); throw; }
     }
 }

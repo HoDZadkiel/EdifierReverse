@@ -17,6 +17,7 @@ public sealed class DeviceDirectory
     readonly Func<string, Task<bool>> _isPaired;
     readonly Func<Task<List<(string A2dp, string Name)>>> _pairedLister;
     readonly Func<string, string, Task<ITransport>> _bleConnect;
+    readonly Func<string, Task<ITransport>> _sppConnect;
     readonly Func<string, Task<bool>> _isConnected;
     public Settings Settings { get; }
 
@@ -24,7 +25,8 @@ public sealed class DeviceDirectory
                            Func<string, Task<bool>>? isPaired = null,
                            Func<Task<List<(string A2dp, string Name)>>>? pairedLister = null,
                            Func<string, string, Task<ITransport>>? bleConnect = null,
-                           Func<string, Task<bool>>? isConnected = null)
+                           Func<string, Task<bool>>? isConnected = null,
+                           Func<string, Task<ITransport>>? sppConnect = null)
     {
         Settings = settings ?? Settings.Load();
         _save = save ?? (s => s.Save());
@@ -33,6 +35,7 @@ public sealed class DeviceDirectory
         _pairedLister = pairedLister ?? Discovery.PairedEdifierDevicesAsync;
         _isConnected = isConnected ?? Discovery.IsConnectedAsync;
         _bleConnect = bleConnect ?? (async (addr, svc) => await BleGattTransport.ConnectAsync(addr, svc));
+        _sppConnect = sppConnect ?? (async a2dp => await RfcommTransport.ConnectAsync(a2dp));
     }
 
     public static DeviceDirectory Load() => new();
@@ -50,6 +53,10 @@ public sealed class DeviceDirectory
 
     public IReadOnlyList<KnownDevice> Devices => Settings.Devices.ToList();
     public KnownDevice? Current => Settings.CurrentDevice();
+    /// <summary>最近一次實際連上的裝置。沒選過裝置時連的是「連著電腦的那台」，不一定是 <see cref="Current"/>（清單第一台）。</summary>
+    public KnownDevice? Active { get; private set; }
+    /// <summary>目前在控制的裝置：連上過就用實際連上的那台，否則用選用的（或第一台）。記名稱、保持開機都以它為準。</summary>
+    public KnownDevice? Controlled => Active ?? Current;
 
     /// <summary>還沒連上、讀不到裝置名稱時顯示的名稱：連過的用裝置名稱，否則用機種名稱，不知道機種就用 Edifier。</summary>
     public static string FallbackName(KnownDevice? d) =>
@@ -143,7 +150,7 @@ public sealed class DeviceDirectory
         return seen;
     }
 
-    /// <summary>連到目前選用的裝置（沒選就用第一台；一台都沒有就先掃描）。官方規則：機種有 SPP 就走 SPP，否則走 BLE GATT。</summary>
+    /// <summary>連到目前選用的裝置（沒選就用第一台；一台都沒有就先掃描）。官方規則：機種有 SPP 就先走 SPP，失敗或沒有 SPP 就走 BLE GATT。</summary>
     public Connector MakeConnector(TimeSpan? scanTimeout = null)
     {
         var scan = scanTimeout ?? TimeSpan.FromSeconds(8);
@@ -156,7 +163,12 @@ public sealed class DeviceDirectory
             Exception? last = null;
             foreach (var dev in candidates)
             {
-                try { return await ConnectOne(dev); }
+                try
+                {
+                    var result = await ConnectOne(dev);
+                    Active = dev;
+                    return result;
+                }
                 catch (Exception e) when (e is IOException or TimeoutException) { last = e; }
             }
             throw last!;
@@ -179,13 +191,19 @@ public sealed class DeviceDirectory
     {
         {
             var session = new Session(dev.Version, dev.Encryption);
-            if (!Catalog.UsesSpp(dev.Model))
+            var errors = new List<string>();
+            if (Catalog.UsesSpp(dev.Model))
             {
-                if (dev.Ble == "") throw new IOException(Strings.T("e.not_found", new { model = dev.Model }));
-                return (await _bleConnect(dev.Ble, Catalog.ByName[dev.Model].Service), session);
+                try { return (await _sppConnect(dev.A2dp), session); }
+                catch (Exception e) when (e is IOException or TimeoutException) { errors.Add($"SPP：{e.Message}"); }
             }
-            var t = await RfcommTransport.ConnectAsync(dev.A2dp);
-            return ((ITransport)t, session);
+            // SPP 失敗時退回 BLE GATT（ES850NB 實機驗證過兩條都可用；與 Python 版一致）。不在目錄的機種不知道 GATT service，不試
+            if (dev.Ble != "" && Catalog.ByName.TryGetValue(dev.Model, out var m))
+            {
+                try { return (await _bleConnect(dev.Ble, m.Service), session); }
+                catch (Exception e) when (e is IOException or TimeoutException) { errors.Add($"BLE：{e.Message}"); }
+            }
+            throw new IOException(errors.Count > 0 ? string.Join("；", errors) : Strings.T("e.not_found", new { model = dev.Model }));
         }
     }
 }

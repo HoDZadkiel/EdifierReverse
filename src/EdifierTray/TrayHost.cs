@@ -130,7 +130,7 @@ public sealed class TrayHost : IDisposable
             _volumeTarget = s.Name;
             Volume.SetTarget(s.Name);
             _wasConnected = false;
-            if (Directory?.Current is { } cur) Directory.RememberName(cur.A2dp, s.Name);
+            if (Directory?.Controlled is { } cur) Directory.RememberName(cur.A2dp, s.Name);
         }
         if (s.Connected != _wasConnected)  // 連上／斷線時重選端點：連上用耳機端點，斷線改用備援的預設輸出
         {
@@ -142,7 +142,7 @@ public sealed class TrayHost : IDisposable
         Render(s);
     }
 
-    string FallbackName => DeviceDirectory.FallbackName(Directory?.Current);
+    string FallbackName => DeviceDirectory.FallbackName(Directory?.Controlled);
 
     void Render(DeviceState s)
     {
@@ -234,7 +234,7 @@ public sealed class TrayHost : IDisposable
 
     void ToggleKeepAwake()
     {
-        if (Directory?.Current is not { } dev) return;
+        if (Directory?.Controlled is not { } dev) return;
         dev.KeepAwake = !dev.KeepAwake;
         Settings.Save();
         ReconcileKeepAwake();
@@ -265,7 +265,7 @@ public sealed class TrayHost : IDisposable
     public void ShowMenuAt(int x, int y)
     {
         Menu.Populate(TrayMenuModel.Build(Service.State, _volume, _muted, Autostart.IsEnabled(), DeviceRows(),
-                                          Settings.Theme, Strings.Language, _scanning, FallbackName, OutputRows(), Directory?.Current?.KeepAwake), MenuLogo());
+                                          Settings.Theme, Strings.Language, _scanning, FallbackName, OutputRows(), Directory?.Controlled?.KeepAwake), MenuLogo());
         Menu.ToggleAt(x, y);
     }
 

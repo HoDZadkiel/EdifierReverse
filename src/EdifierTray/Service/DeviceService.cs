@@ -17,8 +17,8 @@ public sealed record AncState(int? Group, int Mode, int? Db = null)
 public sealed record DeviceState(
     bool Connected = false, string Name = "", string Version = "", int? Battery = null,
     AncState? Anc = null, string Error = "", bool Cooling = false,
-    bool HasAnc = true,
-    bool? PowerSave = null)   // 省電模式：true 開、false 關、null＝不支援或還沒查到（查詢沒有回應就是不支援，例如 ES850NB）   // 連線時 ANC 查詢沒有回應（例如 MP330）就是 false：介面隱藏降噪區塊，重新連線時重判
+    bool HasAnc = true,       // 連線時 ANC 查詢沒有回應（例如 MP330）就是 false：介面隱藏降噪區塊，重新連線時重判
+    bool? PowerSave = null)   // 省電模式：true 開、false 關、null＝不支援或還沒查到（查詢沒有回應就是不支援，例如 ES850NB）
 {
     public bool AncSupported => Anc?.Group is int g && DeviceService.AncModes.ContainsKey(g);
 
@@ -47,12 +47,11 @@ public delegate Task<(ITransport Transport, Session Session)> Connector(Cancella
 /// <summary>
 /// 裝置服務：連線、狀態、ANC 設定的節流與重送、斷線重連。規則來自 ES850NB 實機驗證：
 /// 兩次 ANC 設定間隔 ≤ 1.0 秒時第二次會被裝置靜默忽略，所以設定一律經單一鎖與節流（預設 2.0 秒）；
-/// 設定成功後裝置會主動推送 0xCC。只送查詢與 0xC1（ANC）。
+/// 設定成功後裝置會主動推送 0xCC。只送查詢、0xC1（ANC）與 0xB2（省電模式，使用者從介面切換時）。
 /// </summary>
 public sealed class DeviceService
 {
-    /// <summary>只有實機驗證過的 group 才開放設定。</summary>
-    /// <summary>模式名稱在 strings.json（anc.n.&lt;mode&gt;），依介面語言顯示。</summary>
+    /// <summary>只有實機驗證過的 group 才開放設定。模式名稱在 strings.json（anc.n.&lt;mode&gt;），依介面語言顯示。</summary>
     public static readonly IReadOnlyDictionary<int, IReadOnlyList<int>> AncModes =
         new Dictionary<int, IReadOnlyList<int>> { [16] = new[] { 1, 2, 3, 4, 5 } };
     public static readonly IReadOnlyDictionary<int, int> AmbientMode = new Dictionary<int, int> { [16] = 4 };
@@ -166,7 +165,11 @@ public sealed class DeviceService
     async Task Refresh()
     {
         int? battery = null;
-        try { battery = (sbyte)(await Ask(Cmd.BatteryQuery)).FirstOrDefault(); }
+        try
+        {
+            var p = await Ask(Cmd.BatteryQuery);
+            if (p.Length > 0) battery = (sbyte)p[0];   // 空回應＝格式不符，當成不支援（與 Python 版 parse_battery 一致）
+        }
         catch (ResponseTimeoutException) { }
         var anc = await Optional(Cmd.AncQuery, AncState.Parse);
         if (battery is null && anc is null) throw new ResponseTimeoutException(Cmd.BatteryQuery);  // 兩個都沒回應才視為連線已壞
@@ -224,27 +227,32 @@ public sealed class DeviceService
     async Task RefreshPowerSaveInBackground(Client? client)
     {
         if (client is null) return;
+        await _setLock.WaitAsync();   // 與手動檢查／設定共用一把鎖：同一指令碼不能同時有兩個請求在等回應
         try
         {
             var resp = await client.RequestAsync(Cmd.SavingModeQuery, null, TimeSpan.FromSeconds(1.5));
             if (resp.Payload.Length > 0 && ReferenceEquals(client, _client)) Update(s => s with { PowerSave = resp.Payload[0] == 1 });
         }
         catch (Exception) { /* 沒有回應＝不支援，PowerSave 維持 null；連線中斷由主迴圈處理 */ }
+        finally { _setLock.Release(); }
     }
 
     /// <summary>重新讀取省電模式（唯讀）。裝置沒有回應就是不支援。</summary>
     public async Task<bool> CheckPowerSaveAsync()
     {
         if (!State.Connected || _client is null) throw new ServiceException("e.not_connected");
+        await _setLock.WaitAsync();
         try
         {
-            var resp = await _client.RequestAsync(Cmd.SavingModeQuery, null, _queryTimeout);
+            var client = _client ?? throw new ServiceException("e.conn_lost_plain");
+            var resp = await client.RequestAsync(Cmd.SavingModeQuery, null, _queryTimeout);
             var on = resp.Payload.Length > 0 && resp.Payload[0] == 1;
             Update(s => s with { PowerSave = on });
             return on;
         }
         catch (ResponseTimeoutException) { Update(s => s with { PowerSave = null }); throw new ServiceException("e.power_save_unsupported"); }
         catch (IOException e) { Reconnect(); throw new ServiceException("e.conn_lost", new { err = e.Message }); }
+        finally { _setLock.Release(); }
     }
 
     /// <summary>開關省電模式：送出設定後讀回確認。關閉省電模式 ＝ 防自動關機。只有查得到狀態（PowerSave 不為 null）的機種可用。</summary>

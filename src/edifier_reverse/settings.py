@@ -41,7 +41,7 @@ class Settings:
             self.devices.append(dev)
         else:
             old.ble = dev.ble or old.ble
-            old.version, old.encryption = dev.version, dev.encryption
+            old.version, old.encryption, old.model = dev.version, dev.encryption, dev.model
             old.name = dev.name or old.name
 
     def current_device(self) -> Optional[KnownDevice]:

@@ -87,6 +87,14 @@ def test_settings_roundtrip_and_corrupt_or_unknown_values(tmp_path):
     assert loaded.theme == "system" and [d.a2dp for d in loaded.devices] == ["AA"]
 
 
+def test_remember_updates_the_model_once_an_advert_identifies_it():
+    # 先由已配對清單以通用機種補入，之後廣播辨識出機種：要跟著更新（與 C# 版 Settings.Remember 一致）
+    s = S.Settings()
+    s.remember(S.KnownDevice("AA:AA:AA:AA:AA:01", name="EDIFIER NEW", model="Edifier"))
+    s.remember(S.KnownDevice("AA:AA:AA:AA:AA:01", ble="BLE1", model="MP330"))
+    assert s.devices[0].model == "MP330" and s.devices[0].name == "EDIFIER NEW"
+
+
 def test_remember_keeps_a_known_name_when_the_scan_has_none():
     s = S.Settings()
     s.remember(S.KnownDevice("AA:AA:AA:AA:AA:01", name="EDIFIER ES850NB", version=2, encryption=16))
@@ -270,6 +278,60 @@ def test_without_an_explicit_choice_the_device_connected_over_bluetooth_is_used(
 def test_an_explicit_choice_is_kept_even_when_another_device_is_the_one_connected():
     d = two_models("AA:BB:B3:11:22:33", {"AA:BB:B3:44:55:66"})
     assert [x.model for x in asyncio.run(d.candidates())] == ["MP330"]   # 不擅自改選
+
+
+class _StubTransport:
+    async def close(self):
+        pass
+
+
+def _stub_links(monkeypatch, spp_ok, ble_calls):
+    """把 SPP／BLE 連線換成假的（不碰藍牙）：記下 BLE 被要求連哪個位址。"""
+    import edifier_reverse.ble as ble
+    import edifier_reverse.spp as spp
+
+    async def rfcomm(a2dp, *a, **kw):
+        if not spp_ok:
+            raise ConnectionError("spp down")
+        return _StubTransport()
+
+    async def gatt(addr, profile):
+        ble_calls.append((addr, profile.service))
+        return _StubTransport()
+
+    monkeypatch.setattr(spp, "connect_rfcomm", rfcomm)
+    monkeypatch.setattr(ble.BleakTransport, "connect", staticmethod(gatt))
+
+
+def test_the_device_actually_connected_is_the_one_controlled_not_the_first_in_the_list(monkeypatch):
+    # 清單第一台是 ES850NB、連著電腦的是 MP330：名稱要記在 MP330，不能寫到 ES850NB
+    _stub_links(monkeypatch, spp_ok=False, ble_calls=[])
+    d = two_models("", {"AA:BB:B3:11:22:33"})
+    d.settings.devices[0].name = "EDIFIER ES850NB"
+    assert d.controlled().model == "ES850NB"   # 還沒連過：退回選用（第一台）
+    asyncio.run(d.connector()())
+    assert d.current().model == "ES850NB" and d.controlled().model == "MP330"
+    d.remember_name(d.controlled().a2dp, "EDIFIER MP330")
+    assert d.settings.devices[0].name == "EDIFIER ES850NB"
+
+
+def test_an_spp_model_falls_back_to_ble_when_spp_fails(monkeypatch):
+    from edifier_reverse import catalog
+
+    calls = []
+    _stub_links(monkeypatch, spp_ok=False, ble_calls=calls)
+    _, session = asyncio.run(two_models("AA:BB:B3:44:55:66", set()).connector()())
+    assert calls == [("AA:BB:B0:44:55:66", catalog.BY_NAME["ES850NB"].service)] and session.encryption == 16
+
+
+def test_an_unknown_model_does_not_try_ble(monkeypatch):
+    calls = []
+    _stub_links(monkeypatch, spp_ok=False, ble_calls=calls)
+    d = two_models("", set())
+    d.settings.devices = [S.KnownDevice("AA:BB:B3:77:88:99", "AA:BB:B0:77:88:99", model="Edifier")]
+    with pytest.raises(ConnectionError, match="spp down"):
+        asyncio.run(d.connector()())
+    assert calls == []   # 不在目錄的機種不知道 GATT service（與 C# 版一致）
 
 
 def test_add_paired_adds_new_paired_devices_without_a_scan():

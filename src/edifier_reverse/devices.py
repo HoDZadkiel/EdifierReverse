@@ -41,6 +41,7 @@ class DeviceDirectory:
         self._is_paired = is_paired  # 測試可注入；預設問 Windows 這台電腦有沒有配對
         self._paired_lister = paired_lister  # 測試可注入；預設列出 Windows 已配對的 Edifier 裝置
         self._is_connected = is_connected  # 測試可注入；預設問 Windows 目前有沒有連著
+        self.active: Optional[S.KnownDevice] = None  # 最近一次實際連上的裝置（沒選過時不一定是 current()）
 
     # ---- 查詢 ----
     @property
@@ -49,6 +50,10 @@ class DeviceDirectory:
 
     def current(self) -> Optional[S.KnownDevice]:
         return self.settings.current_device()
+
+    def controlled(self) -> Optional[S.KnownDevice]:
+        """目前在控制的裝置：連上過就用實際連上的那台，否則用選用的（或第一台）。記名稱以它為準。"""
+        return self.active or self.current()
 
     @staticmethod
     def fallback_name(dev: Optional[S.KnownDevice]) -> str:
@@ -158,7 +163,7 @@ class DeviceDirectory:
 
     # ---- 連線 ----
     def connector(self, scan_seconds: float = 8.0) -> Connector:
-        """連到目前選用的裝置（沒選就用第一台；一台都沒有就先掃描）。SPP 優先，失敗退回 BLE。"""
+        """連到目前選用的裝置（沒選就用第一台；一台都沒有就先掃描）。SPP 優先，失敗退回 BLE（與 C# 版一致）。"""
         from .ble import BleakTransport, profile_for
         from .spp import connect_rfcomm
 
@@ -172,7 +177,9 @@ class DeviceDirectory:
             last: Optional[Exception] = None
             for dev in candidates:
                 try:
-                    return await connect_one(dev)
+                    result = await connect_one(dev)
+                    self.active = dev
+                    return result
                 except ConnectionError as e:
                     last = e
             raise last
@@ -186,12 +193,12 @@ class DeviceDirectory:
                     return await connect_rfcomm(dev.a2dp), session
                 except OSError as e:
                     errors.append(f"SPP：{e}")
-            if dev.ble:
+            if dev.ble and dev.model in catalog.BY_NAME:  # 不在目錄的機種不知道 GATT service，不試（與 C# 版一致）
                 try:
                     return await BleakTransport.connect(dev.ble, profile), session
                 except Exception as e:
                     errors.append(f"BLE：{e}")
-            raise ConnectionError("；".join(errors))
+            raise ConnectionError("；".join(errors) or tr("e.not_found", model=dev.model))
 
         return connect
 

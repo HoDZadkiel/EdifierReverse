@@ -1,4 +1,4 @@
-"""封包組裝與解析。格式見 docs/protocol-packet.md（靜態分析，尚未實機驗證）。"""
+"""封包組裝與解析。格式見 docs/protocol-packet.md（v2 header／長度／CRC／XOR 已在 ES850NB、MP330 實機驗證；v1 仍是靜態分析）。"""
 from dataclasses import dataclass
 from typing import Optional
 

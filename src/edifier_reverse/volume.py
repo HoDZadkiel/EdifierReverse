@@ -1,8 +1,8 @@
 """耳機音量：走 Windows 音訊端點（pycaw），不是 Edifier 協定。
 
 實機（ES850NB）對協定的音量查詢 0x66、0xC5 都沒有回應，D8 的音量位元也沒開，
-所以音量由 Windows 負責。這個模組只調整「耳機 (EDIFIER ES850NB)」這個播放端點，
-不動預設輸出裝置、不動其他裝置。pycaw 屬於選用相依（`uv sync --extra tray`）。
+所以音量由 Windows 負責。這個模組只調整目前連線裝置的播放端點（名稱含裝置名稱，例如「耳機 (EDIFIER ES850NB)」），
+找不到時退回系統預設輸出；不改預設輸出裝置。pycaw 屬於選用相依（`uv sync --extra tray`）。
 """
 import warnings
 from typing import Callable, Optional

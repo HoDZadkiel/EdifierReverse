@@ -1,4 +1,4 @@
-"""SPP（RFCOMM）傳輸層。行為對照官方 App 的 SPPManager（靜態分析，尚未實機驗證）。
+"""SPP（RFCOMM）傳輸層。行為對照官方 App 的 SPPManager；ES850NB 實機驗證可用（UUID 查詢即可連上）。
 
 官方做法：對已連線的 A2DP 裝置，用 UUID EDF00000-EDFE-DFED-FEDF-EDFEDFEDFEDF 做 SDP 查詢後連 RFCOMM
 （createRfcommSocketToServiceRecord）；失敗時改直接連 channel 1。收發都是原始封包位元組串流，沒有額外外框，
@@ -7,7 +7,7 @@
 Windows 上 Python 的 socket 模組只能指定 channel 號，所以「用 UUID 查詢」改走 Winsock 的 SOCKADDR_BTH：
 結構裡的 serviceClassId 填 UUID、port 填 0，由系統對該 UUID 做 SDP 查詢後連線（等同 Android 的做法）。
 這裡直接用 ctypes 呼叫 ws2_32.connect，連上後 socket 物件照常使用。
-「port=0 時系統會自動做 SDP」依據的是對微軟文件的理解，尚未實機驗證，所以保留官方的備援順序。
+「port=0 時系統會自動做 SDP」已在 ES850NB 實機驗證；仍保留官方的備援順序（失敗再直連 channel 1）。
 """
 import asyncio
 import ctypes

@@ -1,6 +1,7 @@
 """要送給裝置的請求（指令碼 + payload）。用 Session.build 或 packet.build 轉成封包。
 
-靜態分析結果，尚未實機驗證。設定類請求會改變裝置狀態，實機測試前先確認。
+格式來自靜態分析；ANC、EQ、自訂 EQ 已在 ES850NB、省電模式已在 MP330 實機驗證，其餘未驗證（見 docs/findings.md）。
+設定類請求會改變裝置狀態，實機測試前先確認。
 """
 from dataclasses import dataclass
 from typing import Optional
@@ -40,8 +41,8 @@ def set_eq(rr: int, calibration: Optional[_eq.EqCalibration] = None) -> Request:
 
 
 def set_power_save(on: bool) -> Request:
-    """0xB2：省電模式開關，payload 1 byte（1 開、0 關）。官方 App 的「省電模式」頁（ConneX 1.0.31，靜態分析，未實機驗證）。
-    開著時裝置閒置（無音訊、無操作）15 或 30 分鐘後進入省電待機或自動關機，依機種而異；關掉就不會。"""
+    """0xB2：省電模式開關，payload 1 byte（1 開、0 關）。官方 App 的「省電模式」頁（ConneX 1.0.31）。
+    開著時裝置閒置（無音訊、無操作）15 或 30 分鐘後進入省電待機或自動關機，依機種而異；關掉就不會（MP330 實機驗證：設定、讀回、關閉後不再閒置關機）。"""
     return Request(C.SAVING_MODE_SET, bytes([1 if on else 0]))
 
 

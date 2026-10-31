@@ -1,7 +1,8 @@
 """Windows 11 風格的右鍵選單（Tkinter）。內容由 build_menu 產生（純資料，可測試），TrayMenu 負責畫出來。
 
-項目與代號和 C# 版（src/EdifierTray/Ui/TrayMenuModel.cs）一致：anc:1..5、mute、vol+、vol-、dev:<位址>、
+項目代號沿用 C# 版（src/EdifierTray/Ui/TrayMenuModel.cs）的同名項目：anc:1..5、mute、vol+、vol-、dev:<位址>、
 rescan、theme:system|light|dark、lang:<代碼>、open、reconnect、autostart、quit。
+C# 版另有階層子選單、輸出裝置（out:）與電源（powercheck、powersave、keepawake），這裡還沒有（見 README 的 Roadmap）。
 """
 import time
 import tkinter as tk

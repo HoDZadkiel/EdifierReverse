@@ -302,6 +302,49 @@ public class DirectoryTests
         Assert.Equal(new[] { "AA:BB:B0:11:22:33" }, calls);   // 仍只連 MP330，不擅自改選
     }
 
+    [Fact] public async Task The_device_actually_connected_is_the_one_controlled_not_the_first_in_the_list()
+    {
+        // 清單第一台是 ES850NB、連著電腦的是 MP330：名稱與保持開機要記在 MP330，不能寫到 ES850NB
+        var s = new Settings();
+        s.Devices.Add(new KnownDevice { A2dp = "AA:BB:B3:44:55:66", Ble = "AA:BB:B0:44:55:66", Model = "ES850NB", Name = "EDIFIER ES850NB", Encryption = 16 });
+        s.Devices.Add(new KnownDevice { A2dp = "AA:BB:B3:11:22:33", Ble = "AA:BB:B0:11:22:33", Model = "MP330" });
+        var dir = new DeviceDirectory(s, _ => { }, pairedLister: NoPaired, isConnected: a => Task.FromResult(a == "AA:BB:B3:11:22:33"),
+            bleConnect: (addr, svc) => Task.FromResult<Transport.ITransport>(new FakeDevice(new Session(2, 0))));
+        Assert.Equal("ES850NB", dir.Controlled!.Model);   // 還沒連過：退回選用（第一台）
+        await dir.MakeConnector()(CancellationToken.None);
+        Assert.Equal("ES850NB", dir.Current!.Model);
+        Assert.Equal("MP330", dir.Controlled!.Model);
+        dir.RememberName(dir.Controlled.A2dp, "EDIFIER MP330");
+        Assert.Equal("EDIFIER ES850NB", s.Devices[0].Name);
+    }
+
+    [Fact] public async Task An_spp_model_falls_back_to_ble_when_spp_fails()
+    {
+        // ES850NB 實機驗證過 SPP 與 BLE 都可用；SPP 連不上時改走 BLE（與 Python 版一致）
+        var s = new Settings();
+        s.Devices.Add(new KnownDevice { A2dp = "AA:BB:B3:44:55:66", Ble = "AA:BB:B0:44:55:66", Model = "ES850NB", Encryption = 16 });
+        (string, string)? ble = null;
+        var dir = new DeviceDirectory(s, _ => { }, pairedLister: NoPaired, isConnected: _ => Task.FromResult(false),
+            sppConnect: _ => throw new IOException("spp down"),
+            bleConnect: (addr, svc) => { ble = (addr, svc); return Task.FromResult<Transport.ITransport>(new FakeDevice(new Session(2, 16))); });
+        var (_, session) = await dir.MakeConnector()(CancellationToken.None);
+        Assert.Equal(("AA:BB:B0:44:55:66", Catalog.ByName["ES850NB"].Service), ble);
+        Assert.Equal(16, session.Encryption);
+    }
+
+    [Fact] public async Task An_unknown_model_does_not_try_ble_and_reports_both_failures_or_not_found()
+    {
+        var s = new Settings();
+        s.Devices.Add(new KnownDevice { A2dp = "AA:BB:B3:77:88:99", Ble = "AA:BB:B0:77:88:99", Model = Catalog.GenericModel });
+        var bleTried = false;
+        var dir = new DeviceDirectory(s, _ => { }, pairedLister: NoPaired, isConnected: _ => Task.FromResult(false),
+            sppConnect: _ => throw new IOException("spp down"),
+            bleConnect: (addr, svc) => { bleTried = true; throw new IOException("stub"); });
+        var ex = await Assert.ThrowsAsync<IOException>(() => dir.MakeConnector()(CancellationToken.None));
+        Assert.False(bleTried);   // 不在目錄的機種不知道 GATT service
+        Assert.Contains("spp down", ex.Message);
+    }
+
     [Fact] public async Task Fallback_does_not_override_advertised_devices()
     {
         var (d, _) = Make(null, new List<(string, string)> { (Two[0].Item1, "EDIFIER ES850NB") }, Two[0]);
@@ -382,6 +425,21 @@ public class OtherModelsTests
 
     [Fact] public async Task Device_answering_neither_battery_nor_anc_is_not_treated_as_connected() =>
         Assert.False((await Connect(Cmd.BatteryQuery, Cmd.AncQuery)).Connected);
+
+    [Fact] public async Task An_empty_battery_reply_counts_as_unsupported_not_zero_percent()
+    {
+        // 與 Python 版 parse_battery 一致：空回應是格式不符，不能顯示成 0%（會誤觸低電量提示）
+        Connector c = _ => Task.FromResult(((Transport.ITransport)new FakeDevice(S) { Battery = Array.Empty<byte>() }, S));
+        var svc = new DeviceService(c, backoff: new[] { TimeSpan.FromMilliseconds(10) }, queryTimeout: TimeSpan.FromMilliseconds(150));
+        svc.Start();
+        try
+        {
+            var st = await svc.WaitConnectedAsync(TimeSpan.FromSeconds(3));
+            Assert.Null(st.Battery);
+            Assert.NotNull(st.Anc);
+        }
+        finally { await svc.StopAsync(); }
+    }
 
     [Fact] public void Volume_target_switches_endpoint_by_device_name()
     {

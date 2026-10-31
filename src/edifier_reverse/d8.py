@@ -1,4 +1,4 @@
-"""0xD8 功能旗標回應。欄位表見 docs/protocol-d8.md（靜態分析，尚未實機驗證）。"""
+"""0xD8 功能旗標回應。欄位表見 docs/protocol-d8.md（欄位位置來自靜態分析；ES850NB、MP330 的實機回應見該文件）。"""
 from dataclasses import dataclass
 from typing import Optional
 

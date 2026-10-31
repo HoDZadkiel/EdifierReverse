@@ -14,6 +14,7 @@ sealed class FakeDevice : ITransport
     readonly List<byte> _rx = new();
     long _lastSet = long.MinValue / 2;
     public byte[] Anc = { 16, 1 };
+    public byte[] Battery = { 80 };   // 電量回應的 payload；空陣列模擬格式不符
     public int IgnoredSets;
     public readonly List<byte[]> Written = new();
     public bool Connected = true;
@@ -36,7 +37,7 @@ sealed class FakeDevice : ITransport
         if (Silent.Contains(req.Cmd)) return Task.CompletedTask;
         byte[]? reply = req.Cmd switch
         {
-            Cmd.BatteryQuery => new byte[] { 80 },
+            Cmd.BatteryQuery => Battery,
             Cmd.VersionQuery => new byte[] { 1, 0, 2 },
             Cmd.NameQuery => "SIM-DEVICE"u8.ToArray(),
             Cmd.AncQuery => Anc,
@@ -409,6 +410,45 @@ public class KeepAwakeTests
         Assert.Equal("MP330", KeepAwake.NamePart(new KnownDevice { Name = "EDIFIER MP330", Model = "MP330" }));
         Assert.Equal("ES850NB", KeepAwake.NamePart(new KnownDevice { Model = "ES850NB" }));
         Assert.Equal("", KeepAwake.NamePart(new KnownDevice()));   // 沒名稱也不知機種：不猜
+    }
+
+    [Fact] public async Task Pulses_open_the_stream_only_for_the_burst_and_repeat_each_interval()
+    {
+        var opened = new List<Probe>();
+        using (var pulse = new KeepAwake.Pulse(() => { var p = new Probe(); lock (opened) opened.Add(p); return p; },
+                                               TimeSpan.FromMilliseconds(400), TimeSpan.FromMilliseconds(100)))
+        {
+            await Task.Delay(50);
+            lock (opened) { Assert.Single(opened); Assert.False(opened[0].Disposed); }   // 第一次立刻送
+            await Task.Delay(200);
+            lock (opened) Assert.True(opened[0].Disposed);                                // 脈衝結束就關，不持續播放
+            await Task.Delay(400);
+            lock (opened) Assert.True(opened.Count >= 2);                                 // 下個間隔再送
+        }
+        await Task.Delay(300);
+        lock (opened) { var n = opened.Count; Assert.All(opened, p => Assert.True(p.Disposed)); }   // Dispose 後全部關掉
+    }
+
+    [Fact] public async Task A_failing_open_skips_that_pulse_but_keeps_pulsing()
+    {
+        int tries = 0;
+        using var pulse = new KeepAwake.Pulse(() => ++tries == 1 ? throw new IOException("busy") : new Probe(),
+                                              TimeSpan.FromMilliseconds(150), TimeSpan.FromMilliseconds(50));
+        await Task.Delay(500);
+        Assert.True(tries >= 2);
+    }
+
+    [Fact] public void Pulse_rejects_a_burst_that_is_not_shorter_than_the_interval()
+    {
+        // 脈衝不短於間隔時，等待時間會是負值：背景工作會無聲死掉，所以建構時就擋下
+        Assert.Throws<ArgumentOutOfRangeException>(() => new KeepAwake.Pulse(() => null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new KeepAwake.Pulse(() => null, TimeSpan.FromSeconds(1), TimeSpan.Zero));
+    }
+
+    [Fact] public void Pulse_interval_stays_below_the_devices_idle_timeout()
+    {
+        Assert.True(KeepAwake.Interval < TimeSpan.FromMinutes(15));   // 官方說明：閒置 15 分鐘進省電待機
+        Assert.True(KeepAwake.Burst < KeepAwake.Interval);
     }
 
     [Fact] public void Tone_level_stays_far_below_audibility()
