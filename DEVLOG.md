@@ -919,3 +919,59 @@
 - README.md：驗證表加 MP330 欄、特色加階層選單／輸出裝置／防自動關機並註明 Python 版托盤尚無、命令列表加 power-save、測試數量 315／144、Roadmap 更新；docs/images/tray-menu-dark.png 換成新的階層選單（示範資料，不含真實位址）
 - docs/findings.md（最後更新日、單元測試數、MP330 實機結果與風險列）、docs/tool-design.md（新增第 7 節）、docs/protocol-uuids.md（MP330 BLE 已驗證）、docs/protocol-d8.md（MP330 實機回應）、docs/handoff-other-pc.md（註記）、CLAUDE.md（MP330 現況、C# 領先 Python）
 - push 前掃描發現：測試裡有真實裝置的藍牙位址（MP330、ES850NB）→ 全部改成假位址（AA:BB:B3:… → AA:BB:B0:…，保留 B3→B0 的推導關係）；重跑兩邊測試確認
+
+## 2026-11-01
+
+### 修改內容（Changes）
+- 使用者回報 MP330 關閉省電模式後放到現在都沒關機 → 把「關閉後是否不再自動關機」從未驗證改為已驗證
+- docs/findings.md、docs/protocol-commands.md、README.md（驗證表與 Roadmap 勾選）同步更新
+
+### 問題與解法（Problems & Solutions）
+- 無；放置時間為使用者口述，未精確記錄時數
+
+### 待辦事項（TODO）
+- 「保持開機」（方案 B，送聽不到的訊號）對無省電模式的機種是否有效仍未驗證
+- Python 版托盤補階層選單、輸出裝置切換、防自動關機；未 commit、未 push
+
+### MP330 還原省電模式、開始方案 B 實測（同日追加）
+- 使用者要求取消 MP330 的不關機並改測方案 B：關閉執行中的 EdifierTray（取得同意）→ power-save --model MP330 --set on --yes，讀回確認「省電模式：開」（已還原）
+- %APPDATA%\EdifierTray\settings.json：MP330 的 keepAwake 設為 true（使用者真實設定，測完可改回 false 或在托盤關掉），重開托盤 1.0.11；MP330 端點音量表讀到 0.003，確認訊號有送出
+- 原因：托盤在 MP330（有省電模式）只顯示方案 A，點不到 B，所以直接改設定檔觸發
+
+### 待辦事項（TODO，追加）
+- 觀察：省電模式開＋保持開機（方案 B）放置超過待機時間（15～30 分鐘）MP330 是否仍關機；結果決定 B 是否有效
+
+### 完整程式碼審核與修正（同日追加）
+- 修正（兩版）：沒選過裝置時，記名稱／保持開機／備援名稱寫到清單第一台而非實際連上的那台 → 新增 `DeviceDirectory.Active`／`Controlled`（Python `active`／`controlled()`），TrayHost.cs、tray.py 改用它
+- 統一兩版：Python `Settings.remember` 補更新機種；C# 連線補上「SPP 失敗退回 BLE」（ES850NB 實機兩條都可用，對齊 Python），兩版都不對目錄外機種試 BLE；C# 電量空回應改為 null（原為 0%，對齊 Python）
+- DeviceService.cs：省電模式背景查詢與手動檢查改走 `_setLock`（同指令碼同時等待會拋 InvalidOperationException）；修正錯位與重複的註解；說明補上 0xB2
+- KeepAwake.cs：`Pulse` 擋下 burst ≥ every（負的等待會讓背景工作無聲結束）；類別說明改成脈衝實際行為
+- Cli.cs：`--cold-toggle`、`--live-ui` 改用元素渲染，移除 CopyFromScreen 截圖（專案規則）；補齊模式說明
+- 過時說明：packet／reassembly／requests／responses／spp／d8／eq／volume／menu／cli.py、VolumeControl.cs、Settings.cs、TrayMenuModel.cs
+- 文件：tool-design.md（0xB2、版本檢查標為未實作、音量端點、保持開機為脈衝、MP330 省電已驗證、C# 支援 BLE-only、測試數）、findings.md（節流已在服務層、最後更新日、測試數）、README.md（保持開機描述、測試數）、handoff-other-pc.md（測試數不寫死）
+- 測試：Python 319（+4）、C# 152（+5，含未 commit 的 Pulse 測試 3 個）；兩邊全過
+
+### 問題與解法（同日追加）
+- pytest 偶發崩潰（約 1/7，0x80000003，發生在 asyncio executor 執行緒的垃圾回收中）→ 判斷是 Tk 物件在非主執行緒被回收；conftest 的 tk_root 收尾時在主執行緒 `gc.collect()`。修正後連跑 12 次 0 次崩潰（樣本不大，未完全證實）
+- 連線備援方向：原想讓 Python 對齊 C#（不退回 BLE），查 findings 發現 ES850NB BLE 已實機可用，改為 C# 對齊 Python
+
+### 待辦事項（同日追加）
+- C# 的「SPP 失敗退回 BLE」未實機驗證（只有離線測試）；ES850NB 關機時重連一輪會多等 BLE 逾時（最多約 15 秒）
+- commands.py 檔頭「靜態分析，尚未實機驗證」由 gen_commands.py 產生，未改
+- docs/ldac-and-tool-plan.md 是 2026-10-27 的評估紀錄，內文的 173 個測試保留原樣
+- 未 commit、未 push
+
+### 版本 1.0.12（同日追加）
+- pyproject.toml、uv.lock：1.0.11 → 1.0.12（C#、安裝檔、release.yml 都從 pyproject 讀，`uv lock --check` 通過）；重跑測試 Python 319、C# 152 全過
+- 建置 %TEMP%\EdifierTray-installer\EdifierTray-Setup-1.0.12.exe（63.3 MB）
+- README：辨識與連線列補「SPP 連不上自動改走 BLE（C# 版備援只有離線測試）」、自動挑裝置補「名稱與防自動關機記在實際連上的那台」、MP330 驗證日期改 10-31～11-01；新增 MP330 面板圖與圖說
+- docs/images：tray-panel-dark／light 重產（原為英文介面、沒有版本號，改成繁中、與 README 和選單圖一致），新增 tray-panel-mp330-dark.png（示範資料，`--demo-shot … zh-TW:mp330`）；tray-menu-dark.png 重產後與原圖逐位元組相同，未換
+- 安裝：經使用者同意關閉執行中的測試版托盤（%TEMP%\EdifierTray-pulse-test，1.0.11，方案 B 觀察因此中斷、計時重來）→ 靜默安裝到 %LOCALAPPDATA%\EdifierTray（保留登入時啟動）→ 啟動 1.0.12，程序確認在執行
+
+### 問題與解法（同日追加）
+- 安裝檔建置失敗（CS0579 屬性重複）：先前跑 `dotnet test` 沒設 EDIFIER_BUILD_ROOT，在 src/EdifierTray 產生 obj/bin，被外部建置根目錄的 publish 一併編入 → 刪掉這兩個（gitignore 內、當天產生的建置產物）後重建成功
+
+### 待辦事項（同日追加）
+- 新版托盤連上裝置、面板顯示是否正常：只確認程序在跑，未看畫面
+- 方案 B 觀察重新計時：MP330 省電模式開 + keepAwake，放置超過 15～30 分鐘看是否仍關機
+- 程式內的版本字串帶的 commit 是 6210323（工作目錄未 commit 的改動也已包含）；未 commit、未 push、未推 v1.0.12 標籤
