@@ -45,6 +45,76 @@ public static class AudioOutputs
         finally { Marshal.ReleaseComObject(policy); }
     }
 
+    /// <summary>
+    /// 輸出裝置清單的快取：右鍵選單直接讀 <see cref="Current"/>，不在 UI 執行緒列舉
+    /// （列舉並讀名稱實測每次約 0.55 秒，會讓選單明顯延遲才出現）。
+    /// 啟動時，以及 Windows 通知播放端點增減、狀態或預設輸出改變時，在背景重抓；重抓期間又有通知就再抓一次。
+    /// </summary>
+    public sealed class Cache : IDisposable
+    {
+        readonly Func<List<AudioOutput>> _list;
+        IReadOnlyList<AudioOutput> _current = Array.Empty<AudioOutput>();
+        int _running, _dirty;
+        MMDeviceEnumerator? _enumerator;
+        Notifier? _notifier;
+
+        /// <param name="list">列出端點，測試可注入；預設 <see cref="AudioOutputs.List"/>。</param>
+        public Cache(Func<List<AudioOutput>>? list = null) => _list = list ?? AudioOutputs.List;
+
+        public IReadOnlyList<AudioOutput> Current => Volatile.Read(ref _current);
+
+        /// <summary>訂閱 Windows 的端點變動通知並先抓一次。訂閱失敗只是不會自動更新，不影響其他功能。</summary>
+        public void Start()
+        {
+            try
+            {
+                _enumerator = new MMDeviceEnumerator();
+                _notifier = new Notifier(this);
+                _enumerator.RegisterEndpointNotificationCallback(_notifier);
+            }
+            catch (Exception) { }
+            Refresh();
+        }
+
+        /// <summary>在背景重抓。回傳的工作在這一輪（含期間累積的通知）抓完時完成，測試用。</summary>
+        public Task Refresh()
+        {
+            Volatile.Write(ref _dirty, 1);
+            if (Interlocked.CompareExchange(ref _running, 1, 0) != 0) return Task.CompletedTask;   // 抓取中：由那一輪再抓一次
+            return Task.Run(() =>
+            {
+                try
+                {
+                    while (Interlocked.Exchange(ref _dirty, 0) == 1)
+                    {
+                        try { Volatile.Write(ref _current, (IReadOnlyList<AudioOutput>)_list()); }
+                        catch (Exception) { }   // 列不出來就保留上一份
+                    }
+                }
+                finally { Volatile.Write(ref _running, 0); }
+                if (Volatile.Read(ref _dirty) == 1) Refresh();   // 剛結束時才進來的通知
+            });
+        }
+
+        public void Dispose()
+        {
+            try { if (_enumerator is not null && _notifier is not null) _enumerator.UnregisterEndpointNotificationCallback(_notifier); }
+            catch (Exception) { }
+            _enumerator?.Dispose();
+        }
+
+        sealed class Notifier : NAudio.CoreAudioApi.Interfaces.IMMNotificationClient
+        {
+            readonly Cache _cache;
+            public Notifier(Cache cache) => _cache = cache;
+            public void OnDeviceStateChanged(string deviceId, NAudio.CoreAudioApi.DeviceState newState) => _cache.Refresh();
+            public void OnDeviceAdded(string pwstrDeviceId) => _cache.Refresh();
+            public void OnDeviceRemoved(string deviceId) => _cache.Refresh();
+            public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId) { if (flow == DataFlow.Render) _cache.Refresh(); }
+            public void OnPropertyValueChanged(string pwstrDeviceId, PropertyKey key) { }   // 屬性變動非常頻繁（音量等），不跟著重抓
+        }
+    }
+
     [ComImport, Guid("870af99c-171d-4f9e-af0d-e63df40c2bc9")]
     class PolicyConfigClient { }
 

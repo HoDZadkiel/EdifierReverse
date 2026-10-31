@@ -19,6 +19,7 @@ public sealed class TrayHost : IDisposable
     readonly NotifyIcon? _icon;
     readonly ConnectionWatcher _watcher = new();
     readonly KeepAwake _keepAwake = new();
+    readonly AudioOutputs.Cache _outputs = new();   // 右鍵選單用快取，不在 UI 執行緒列舉端點
     System.Threading.Timer? _keepAwakeTimer;
     readonly OsdTracker _tracker = new();
     HotkeyListener? _hotkeys;
@@ -67,6 +68,7 @@ public sealed class TrayHost : IDisposable
         RefreshVolume();
         Render(Service.State);
         Service.Start();
+        _outputs.Start();
         if (_icon is not null) StartHotkeys();
         if (Directory is not null)
         {
@@ -241,19 +243,14 @@ public sealed class TrayHost : IDisposable
         Osd.ShowOsd(Strings.T(dev.KeepAwake ? "o.keep_awake_on" : "o.keep_awake_off", new { name = DeviceDirectory.FallbackName(dev) }));
     }
 
-    static IReadOnlyList<AudioOutput> OutputRows()
-    {
-        try { return AudioOutputs.List(); }
-        catch (Exception) { return Array.Empty<AudioOutput>(); }   // 列不出來就不顯示這一區，不影響其他功能
-    }
-
     /// <summary>把指定的播放端點設為系統預設輸出。音量按鈕的端點會重新挑，結果顯示在 OSD。</summary>
     void SwitchOutput(string deviceId)
     {
         try
         {
-            var name = AudioOutputs.List().FirstOrDefault(o => o.Id == deviceId)?.Name ?? "";
+            var name = _outputs.Current.FirstOrDefault(o => o.Id == deviceId)?.Name ?? "";
             AudioOutputs.SetDefault(deviceId);
+            _ = _outputs.Refresh();   // Windows 也會通知預設改變；這裡先更新，下次開選單勾選就正確
             Volume.Reset();
             RefreshVolume();
             Osd.ShowOsd(Strings.T("o.output_switched", new { name = AudioOutputs.Shorten(name) }));
@@ -265,7 +262,7 @@ public sealed class TrayHost : IDisposable
     public void ShowMenuAt(int x, int y)
     {
         Menu.Populate(TrayMenuModel.Build(Service.State, _volume, _muted, Autostart.IsEnabled(), DeviceRows(),
-                                          Settings.Theme, Strings.Language, _scanning, FallbackName, OutputRows(), Directory?.Controlled?.KeepAwake), MenuLogo());
+                                          Settings.Theme, Strings.Language, _scanning, FallbackName, _outputs.Current, Directory?.Controlled?.KeepAwake), MenuLogo());
         Menu.ToggleAt(x, y);
     }
 
@@ -361,6 +358,7 @@ public sealed class TrayHost : IDisposable
         _watcher.Dispose();
         _keepAwakeTimer?.Dispose();
         _keepAwake.Dispose();
+        _outputs.Dispose();
         _hotkeys?.Dispose();
         if (_icon is not null) { _icon.Visible = false; _icon.Dispose(); }
         Menu.Close();

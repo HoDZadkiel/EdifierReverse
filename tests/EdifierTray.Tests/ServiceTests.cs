@@ -541,3 +541,44 @@ public class PowerSaveTests
         finally { await svc.StopAsync(); }
     }
 }
+
+public class AudioOutputCacheTests
+{
+    static List<AudioOutput> One(string name) => new() { new AudioOutput("{" + name + "}", name, true) };
+
+    [Fact] public async Task Reading_the_menu_rows_never_enumerates_on_the_caller_thread()
+    {
+        // 右鍵選單只讀快取：列舉端點很慢（實測約 0.55 秒），不能在 UI 執行緒做
+        int calls = 0;
+        using var cache = new AudioOutputs.Cache(() => { Interlocked.Increment(ref calls); return One("喇叭"); });
+        Assert.Empty(cache.Current);   // 還沒抓過：選單先不顯示輸出裝置區
+        Assert.Equal(0, calls);
+        await cache.Refresh();
+        for (int i = 0; i < 5; i++) Assert.Equal("喇叭", cache.Current.Single().Name);
+        Assert.Equal(1, calls);
+    }
+
+    [Fact] public async Task Notifications_during_a_slow_refresh_cause_exactly_one_more_refresh()
+    {
+        int calls = 0;
+        using var gate = new ManualResetEventSlim(false);
+        using var cache = new AudioOutputs.Cache(() => { var n = Interlocked.Increment(ref calls); if (n == 1) gate.Wait(2000); return One($"第{n}次"); });
+        var first = cache.Refresh();
+        await Task.Delay(50);
+        for (int i = 0; i < 10; i++) _ = cache.Refresh();   // 抓取中連續來 10 個通知
+        gate.Set();
+        await first;
+        Assert.Equal(2, calls);                    // 合併成再抓一次，不是 10 次
+        Assert.Equal("第2次", cache.Current.Single().Name);   // 最後拿到的是通知之後的狀態
+    }
+
+    [Fact] public async Task A_failed_refresh_keeps_the_previous_list()
+    {
+        bool fail = false;
+        using var cache = new AudioOutputs.Cache(() => fail ? throw new InvalidOperationException("COM 失敗") : One("喇叭"));
+        await cache.Refresh();
+        fail = true;
+        await cache.Refresh();
+        Assert.Equal("喇叭", cache.Current.Single().Name);
+    }
+}

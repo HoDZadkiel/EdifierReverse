@@ -975,3 +975,27 @@
 - 新版托盤連上裝置、面板顯示是否正常：只確認程序在跑，未看畫面
 - 方案 B 觀察重新計時：MP330 省電模式開 + keepAwake，放置超過 15～30 分鐘看是否仍關機
 - 程式內的版本字串帶的 commit 是 6210323（工作目錄未 commit 的改動也已包含）；未 commit、未 push、未推 v1.0.12 標籤
+
+### commit 與 push（同日追加）
+- 008ea4c（程式、測試、版本 1.0.12）、be45201（文件、README 圖文）推到 origin/main
+- safe-push：機密掃描把 DEVLOG 的 %APPDATA%／%TEMP% 路徑判為 Domain\User（誤判，使用者確認後推送）；人工確認無本機使用者名稱、真實藍牙位址、機密檔
+- 未推 v1.0.12 標籤（推了才會觸發 release.yml 建置並上傳安裝檔）
+
+### 右鍵選單延遲（同日追加）
+- 原因：`ShowMenuAt` 每次在 UI 執行緒呼叫 `AudioOutputs.List()`（列舉播放端點並讀名稱），實測 540～591 ms／次（8 個端點，連 5 次都一樣，系統不快取）
+- src/EdifierTray/Service/AudioOutputs.cs：新增 `AudioOutputs.Cache`，啟動時與 IMMNotificationClient 通知（增減、狀態、Render 預設改變；忽略頻繁的屬性變動）在背景重抓，抓取中的通知合併成再抓一次，失敗保留舊清單
+- TrayHost.cs：選單與切換輸出改讀快取，切換後主動重抓；移除 OutputRows()
+- tests/EdifierTray.Tests/ServiceTests.cs：+3（讀取不列舉、通知合併、失敗保留）；C# 155 全過
+- 文件：tool-design.md 第 7 節、測試數 155（README、findings、tool-design）
+- 刪除跑測試在 src/EdifierTray 產生的 obj／bin（否則建安裝檔會重複定義）
+
+### 待辦事項（同日追加）
+- 體感：使用者以測試版試按，回報右鍵選單明顯變快（2026-11-01）；未 commit、未 push
+- 同類問題未改：VolumeControl 在連上／斷線時也在 UI 執行緒列舉端點（只在連線狀態改變時發生）
+- 換上測試版：在專案外建置到 %TEMP%\EdifierTray-menu-test（EDIFIER_BUILD_ROOT 指向 %TEMP%，專案內不留 obj），關閉已安裝的 1.0.12、啟動測試版；登入時啟動仍指向已安裝的 1.0.12（重開機會回到舊版）
+
+### 1.0.13 發佈（同日追加）
+- pyproject.toml、uv.lock：版本 1.0.12 → 1.0.13（內容為右鍵選單快取）
+- 測試：Python 319、C# 155 全過；跑 C# 測試前再次清掉 tests/EdifierTray.Tests 的專案內 obj／bin（又撞到 CS0579）
+- 建置 EdifierTray-Setup-1.0.13.exe（63.3 MB），關閉測試版、靜默安裝到 %LOCALAPPDATA%\EdifierTray 並啟動；登入時啟動指向 1.0.13
+- 靜默安裝不會自動啟動托盤，要手動啟動

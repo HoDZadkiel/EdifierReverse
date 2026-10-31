@@ -4,7 +4,7 @@
 
 ## 一句話現況
 
-已從官方 App（ConneX 1.0.31）還原出 ES850NB 與 MP330 的藍牙連線方式、封包格式、指令碼與主要指令的 payload，並寫成有 319 個單元測試的 Python 函式庫與命令列工具（含 BLE 與 SPP 兩種傳輸層），以及有 152 個測試的 C#／WPF 托盤。**ES850NB 已完成實機驗證**（封包格式、SPP 與 BLE 連線、全部只讀查詢、ANC 五種模式、EQ 預設切換與自訂 EQ 寫入，見第 0 節）；**MP330 已部分實機驗證**（2026-10-31：BLE 連線、名稱／電量／EQ 查詢、省電模式 `0xB1`／`0xB2` 的讀取與設定，見第 0 節與 [protocol-commands.md](protocol-commands.md)），其餘結論仍是靜態分析（讀反編譯碼）。
+已從官方 App（ConneX 1.0.31）還原出 ES850NB 與 MP330 的藍牙連線方式、封包格式、指令碼與主要指令的 payload，並寫成有 319 個單元測試的 Python 函式庫與命令列工具（含 BLE 與 SPP 兩種傳輸層），以及有 155 個測試的 C#／WPF 托盤。**ES850NB 已完成實機驗證**（封包格式、SPP 與 BLE 連線、全部只讀查詢、ANC 五種模式、EQ 預設切換與自訂 EQ 寫入，見第 0 節）；**MP330 已部分實機驗證**（2026-10-31：BLE 連線、名稱／電量／EQ 查詢、省電模式 `0xB1`／`0xB2` 的讀取與設定，見第 0 節與 [protocol-commands.md](protocol-commands.md)），其餘結論仍是靜態分析（讀反編譯碼）。
 
 ## 可信度怎麼讀
 
@@ -178,7 +178,7 @@ src/edifier_reverse/
   tray.py        托盤小工具（pystray 加面板），選用相依 tray
 （C# 版在 src/EdifierTray，見 tool-design.md 第 6 節）
 scripts/         解密產品表、產生常數表、抽取 ANC / D8 表
-tests/           319 個單元測試（C# 的 152 個在 tests/EdifierTray.Tests）（離線，不需藍牙）
+tests/           319 個單元測試（C# 的 155 個在 tests/EdifierTray.Tests）（離線，不需藍牙）
 ```
 
 測試品質：封包測試的向量是手算的位元組；對 `packet.py`、`reassembly.py`、`spp.py`、`ble.py`、`sim.py` 做過破壞性驗證（改常數、關檢查、顛倒順序），各次都有測試失敗。SPP 傳輸層用真的 socket（`socketpair`）對模擬裝置測過，但沒有碰過真正的藍牙。
