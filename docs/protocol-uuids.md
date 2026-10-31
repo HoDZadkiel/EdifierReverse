@@ -25,7 +25,7 @@
 ## 觀察
 
 - 兩款的 Read/Write 特徵值 UUID 相同，只有 Service UUID 不同 → 疑似共用同一套封包協定。
-- 只有 ES850NB 有 SPP 通道，MP330 只走 BLE。
+- 只有 ES850NB 有 SPP 通道，MP330 只走 BLE。**MP330 的 BLE 連線已實機驗證**（2026-10-31）：service `48094c01-1a48-11e9-ab14-d663bd873d93`，read／write characteristic 與表中相同；已用經典藍牙連著電腦時不廣播，BLE 位址為經典位址第三個 byte 低 4 bit 清零（`B3`→`B0`）。
 - **官方 App 的選路規則是「有 SPP UUID 就走 SPP」，所以 ES850NB 實際走 SPP，MP330 走 BLE GATT**（見 `protocol-packet.md`）。ES850NB 表中的 BLE GATT UUID 官方 App 不用，是否可用未知。
 
 ## 程式出處（反編譯碼，位於本機 `C:\Work\edifier\out`）

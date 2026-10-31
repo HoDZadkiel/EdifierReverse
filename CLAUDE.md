@@ -6,7 +6,7 @@
 
 逆向 Edifier 藍牙耳機（ES850NB）通訊協定，在 Windows 上解鎖完整功能。
 
-背景：Edifier 的進階功能（ANC、EQ、模式切換等）只有手機 App 能控制，Windows 無法使用。目標是還原通訊協定，做出 Windows 端的 Python 函式庫／CLI 與托盤小工具，完整操作 ES850NB。MP330 喇叭已不在目標內（程式與文件中的 MP330 內容保留，不再測試）。素材：ES850NB 實機、Android 手機、官方 APK。
+背景：Edifier 的進階功能（ANC、EQ、模式切換等）只有手機 App 能控制，Windows 無法使用。目標是還原通訊協定，做出 Windows 端的 Python 函式庫／CLI 與托盤小工具，完整操作 ES850NB。MP330 喇叭原本不在目標內；2026-10-31 起已能被托盤發現並以 BLE 連線讀取狀態（Python 與 C# 皆是），並部分實機驗證（連線、查詢、省電模式讀寫），仍不是主要驗證對象。C# 版托盤功能領先 Python 版（階層選單、輸出裝置切換、防自動關機只有 C# 有）。素材：ES850NB 實機、Android 手機、官方 APK。
 
 ## 專案性質與技術棧
 

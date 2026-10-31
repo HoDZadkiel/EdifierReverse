@@ -140,6 +140,19 @@ bleVersion ≤ 1：payload 沒有 `groupIndex`，只有 `[modeIndex, (DB)]`，�
 | 高清編碼 | `0x91`/`0x92`（145/146） | `[index, ldac, lhdc]`；長度 2 且 index 為 7、10、13 時 `P[1]` 是 LHDC、沒有 LDAC；-1 表示裝置沒有該選項。**切換可能讓裝置重啟**，見 [hq-audio-assessment.md](hq-audio-assessment.md) |
 | 設定結果 | 各 SET 指令 | `P[index] == 1` 表示成功 |
 
+## 閒置自動關機／省電模式（靜態分析，未實機驗證）
+
+來源：官方 App ConneX 1.0.31 反編譯碼（`CommandManager`、`CommandParser`、`PowerSaveModeActivity`）與 App 內的說明文字。
+
+| 設定 | 指令碼 | payload | 回應 | 顯示條件（D8 旗標） |
+|------|--------|---------|------|---------------------|
+| 省電模式 | 查詢 `0xB1`（177）／設定 `0xB2`（178） | 查詢空；設定 1 byte（1 開、0 關） | `P[0]==1` 為開，兩個指令碼共用同一個解析 | `b23_isSupportSavingMode` |
+| 無音訊自動關機 | 查詢 `0xD7`（215）／設定 `0xD6`（214） | 查詢空；設定 1 byte（1 開、0 關） | `P[0]==1` 為開 | `b8IsSupportAutoShutdownWithoutAudioInput` |
+
+- App 的省電模式說明（依機種的產品表備註選用不同版本）：開啟時，藍牙裝置已連上但閒置 15 分鐘（無音訊、無操作）會進入省電待機，約 1 秒內可恢復；沒有任何藍牙裝置連上閒置 15 分鐘會關機；有版本寫明只在電池供電時閒置 30 分鐘自動關機。**因此關閉省電模式應可避免閒置自動關機**，但這是從說明文字推得的，尚未在裝置上驗證。
+- MP330 的 D8 回應：`b23_isSupportSavingMode` 為 1（有省電模式設定）、`b8` 為 0（沒有無音訊自動關機設定）。
+- 實作：`requests.set_power_save`／`set_auto_shutdown_no_input`、`responses.parse_power_save`／`parse_auto_shutdown_no_input`、命令列 `power-save`（預設只讀；`--set on|off` 須加 `--yes`，設定前印出原值與還原指令，設定後讀回確認）。
+
 ## 未解
 
 - 兩款裝置的 `groupIndex`、電量用哪個指令、是否 TWS 型

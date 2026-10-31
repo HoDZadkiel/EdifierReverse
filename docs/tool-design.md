@@ -67,7 +67,7 @@ cli.py 的 status / anc 子命令  ----^（同一個 DeviceService，不碰 GUI�
 
 ## 6. 兩個實作版本（2026-10-27）
 
-同一份設計做了兩個版本，功能相同：電量與 ANC 狀態、5 種降噪模式、環境音強度拖曳條、音量拖曳條與靜音、托盤圖示（電量環 logo，連線時中央顯示電量數字）、電量過低與降噪模式改變的 OSD 提示、全域快捷鍵（Ctrl+Alt+A 輪替降噪、Ctrl+Alt+↑／↓ 音量、Ctrl+Alt+0 靜音；Python 與 C# 的鍵表與測試向量一致）、Windows 11 風格彈出面板（圓角、深淺色跟隨系統）。兩版都只送查詢與 `0xC1`，設定指令經節流（≥ 2 秒）與重送，只開放實機驗證過的 group 16。
+同一份設計做了兩個版本，**起初功能相同**（2026-10-31 起 C# 版領先，見第 7 節）：電量與 ANC 狀態、5 種降噪模式、環境音強度拖曳條、音量拖曳條與靜音、托盤圖示（電量環 logo，連線時中央顯示電量數字）、電量過低與降噪模式改變的 OSD 提示、全域快捷鍵（Ctrl+Alt+A 輪替降噪、Ctrl+Alt+↑／↓ 音量、Ctrl+Alt+0 靜音；Python 與 C# 的鍵表與測試向量一致）、Windows 11 風格彈出面板（圓角、深淺色跟隨系統）。兩版都只送查詢與 `0xC1`，設定指令經節流（≥ 2 秒）與重送，只開放實機驗證過的 group 16。
 
 | | A. Python（`edifier-reverse tray`） | B. C#／WPF（`src/EdifierTray`） |
 |---|---|---|
@@ -75,7 +75,7 @@ cli.py 的 status / anc 子命令  ----^（同一個 DeviceService，不碰 GUI�
 | 協定與傳輸 | 沿用 `src/edifier_reverse`（Winsock SOCKADDR_BTH） | 移植成 C#（`Protocol/`、`Transport/`），同樣用 Winsock SOCKADDR_BTH，不依賴 WinRT 的 RFCOMM |
 | 位址探索 | bleak 掃描廣播，結果快取到 `%APPDATA%\edifier-reverse` | WinRT 廣播監聽，快取到 `%APPDATA%\EdifierTray` |
 | 音量 | pycaw | NAudio（兩者都調「耳機 (EDIFIER ES850NB)」播放端點） |
-| 測試 | 224 個 pytest（含協定、服務、面板、音量） | 71 個 xUnit（含選單內容、位置、開機啟動、視窗行為；協定向量與 Python 版相同，另含實機抓到的 `aa ec c1 00 02 b5 a7 b5` 逐位元組比對） |
+| 測試 | 315 個 pytest（含協定、服務、面板、音量；2026-10-31 數字） | 71 個 xUnit（含選單內容、位置、開機啟動、視窗行為；協定向量與 Python 版相同，另含實機抓到的 `aa ec c1 00 02 b5 a7 b5` 逐位元組比對） |
 | 執行需求 | Python 環境（uv）；尚未打包 | .NET 8 桌面執行環境（本機已有；他機需安裝）；單檔發佈 25 MB |
 
 **實測數字（這台電腦，ES850NB，2026-10-27）**
@@ -109,3 +109,17 @@ dotnet test tests/EdifierTray.Tests -c Release
 - 設定檔：Python 在 `%APPDATA%\edifier-reverse\settings.json`，C# 在 `%APPDATA%\EdifierTray\settings.json`（含裝置位址，不在專案目錄；兩版各自獨立）。
 
 驗證用旗標（C# 版）：`--cli status`、`--cli anc N [強度]`、`--demo-shot 路徑 [dark|light]`、`--live-ui 目錄`（連真的耳機、程式化操作元件、截圖並還原）、`--cold-toggle 路徑`（重現第一次點圖示）、`--menu-shot 路徑 [dark|light] [ok|off|muted]`（渲染選單）、`--live-menu`（連真的耳機，從選單「點」各項目並還原）。
+
+## 7. MP330 與防自動關機（2026-10-31，僅 C# 版）
+
+起因：使用者把 MP330（喇叭，只有 BLE、沒有降噪）接上電腦，托盤找不到它，且它閒置一段時間就自動關機。
+
+- **發現**：已用經典藍牙連著電腦的裝置不再發 BLE 廣播，掃描看不到。改讀 Windows 的已配對 Edifier 裝置（`DeviceInformation`），機種由名稱對應目錄，BLE 位址由經典位址推導（第三個 byte 低 4 bit 清零；ES850NB、MP330 實機皆符合），沒有廣播時的 Session 用實機驗證值（ES850NB 版本 2／加密 16，MP330 版本 2／不加密）。連線時會驗證 GATT service，推導錯了就連不上。
+- **自動挑裝置**：沒有明確選過裝置時，只連目前實際連著電腦（藍牙連線狀態）的那台；明確選過的不擅自改。`ConnectionWatcher` 監看全部已知裝置，連上就喚醒重連。啟動與每次連線前都會補入新配對的裝置，並用鎖避免同時補入造成重複。
+- **BLE 傳輸**：`BleGattTransport`（WinRT GATT）。關閉時要取消訂閱並釋放 GATT 服務與裝置，否則同一台再連會取不到 characteristic（顯示未連線）。
+- **沒有降噪的機種**：連上時 ANC 查詢沒有回應 → `HasAnc=false`，選單與面板隱藏降噪區塊；之後 ANC 有回應就恢復。
+- **階層式右鍵選單**：大項（降噪模式、裝置、輸出裝置、電源、外觀與語言）滑鼠移上去，子選單從右側彈出（放不下翻到左側）。子選單用獨立無邊框視窗，不用 Popup（其視窗銷毀是非同步的，會讓測試主機收尾時當機）。
+- **輸出裝置切換**：列出作用中的 Windows 播放端點（排除 Hands-Free），以 `IPolicyConfig`（系統內建但未文件化）設為預設，只改「主控台」與「多媒體」角色。
+- **防自動關機（優先用原生做法）**：機種有省電模式（`0xB1`／`0xB2`，連上時查詢有回應）→ 面板與選單顯示目前狀態、可重新檢查、可關閉（關閉＝防自動關機，送出後讀回確認）。查詢沒有回應的機種（ES850NB）→ 退回「保持開機」：對該裝置的播放端點持續送出約 -50 dBFS、25 Hz 的訊號，不碰裝置設定。
+- **尚未驗證**：關閉省電模式後 MP330 是否真的不再自動關機；「保持開機」訊號對韌體是否算有音訊（只確認訊號有送到 Windows 端點，音量表讀到 0.003）；C# 版的省電模式檢查對真機的實測（命令列版已實測）。
+- **Python 版**尚未做階層選單、輸出裝置切換、防自動關機。

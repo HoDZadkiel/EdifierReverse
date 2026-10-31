@@ -776,3 +776,146 @@
 
 ### 待辦事項（TODO）
 - 確認 v1.0.4 的 Release 建置成功、安裝檔已上傳
+
+## 2026-10-31
+
+### MP330 發現與連線適配（Changes）
+- src/edifier_reverse/pairing.py：新增 paired_edifier_devices（Windows 已配對且名稱為 EDIFIER 的裝置）
+- src/edifier_reverse/devices.py：scan 對沒有廣播的已配對裝置用名稱對應機種、推導 BLE 位址（B3→B0）、套實機驗證的 Session（ES850NB 2/16，MP330 2/0）
+- src/EdifierTray/Transport/BleGattTransport.cs：新增 BLE GATT 傳輸（C# 原本不支援 BLE）；Service/DeviceDirectory.cs、Discovery.cs 同步備援發現與 BLE 連線
+- tests/test_i18n_devices.py、tests/EdifierTray.Tests/I18nDevicesTests.cs：新增備援發現與 BLE 選路測試；舊的「BLE 機種回報未支援」測試改為驗證走 BLE
+- docs/findings.md、CLAUDE.md：補 MP330 實機結果
+
+### 問題與解法（Problems & Solutions）
+- 原因：MP330 已用經典藍牙連著電腦，不再發 BLE 廣播（10 秒掃描偶爾掃不到），掃描式發現找不到 → 改用 Windows 已配對清單當備援
+- 無廣播就沒有 version/encryption → 實機試 enc 0 可解碼、enc 16 為亂碼，MP330 採 (2, 0)
+- 實測：Python 與 C# 皆能掃描→選用→連線讀到名稱 EDIFIER MP330、韌體 1.0.1、電量 100；ANC 查詢無回應（MP330 無 ANC）
+- 測試：pytest 302 通過；dotnet test 127 通過（設 EDIFIER_BUILD_ROOT 時 tests 專案會因 obj 殘留重複定義失敗，未設時正常）
+
+### 待辦事項（TODO）
+- strings.json 的 e.ble_only 已不再使用，可清除（四語言一併）
+- 托盤 UI 對 MP330 未做實機操作驗證；未 push、未升版
+
+### 隱藏無 ANC 機種的降噪區塊（同日追加，Changes）
+- service.py／DeviceService.cs：DeviceState 新增 has_anc／HasAnc；連線時 ANC 查詢無回應 → false，之後 ANC 有回應就轉 true，重新連線重判
+- menu.py／TrayMenuModel.cs：無 ANC 時不放降噪項目與多餘分隔線，標頭只顯示電量（新字串 m.header_battery，四語言）
+- flyout.py／FlyoutWindow.xaml(.cs)：降噪模式與環境音強度包成一塊，無 ANC 時收起，視窗高度跟著縮（Python 368→186）
+- 測試：新增選單、服務（含「之後有回應就恢復」）、面板可見性；pytest 304、dotnet 128 通過
+
+### 待辦事項（TODO）
+- 已安裝的托盤需重新安裝才會生效；未升版、未 push
+
+### 升版 1.0.5 並打包（Changes）
+- pyproject.toml、uv.lock：版本 1.0.4 → 1.0.5
+- 已用 scripts/build-installer.ps1 產生 C:\Work\installer-out\EdifierTray-Setup-1.0.5.exe（63.2 MB），尚未安裝實測
+- 打包前刪除 src/EdifierTray 的 bin/Debug、obj/Debug（依先前紀錄的做法）
+
+### 待辦事項（TODO）
+- 安裝 1.0.5 後確認 MP330 出現在裝置清單且降噪區塊隱藏；未 commit、未打標籤、未 push
+
+### 以藍牙連線狀態自動發現裝置、升版 1.0.6（Changes）
+- 原因：1.0.5 實測 MP330 連著電腦但托盤沒反應——設定檔只有 ES850NB 且沒選過裝置，一直在連沒開機的 ES850NB，MP330 從未進清單
+- Discovery.cs／pairing.py：新增 IsConnectedAsync／is_connected（藍牙連線狀態）
+- DeviceDirectory.cs／devices.py：AddPaired（啟動與每次連線前把 Windows 已配對的 Edifier 補進清單）；Candidates（沒明確選過時只連目前連著電腦的裝置，都沒連著才連第一台；明確選過就不擅自改選）；連線依序嘗試候選
+- ConnectionWatcher.cs／pairing.py／TrayHost.cs／tray.py：改為監看所有已知裝置，哪台連上就喚醒重連
+- 測試：兩邊各補 2–3 項（連著的優先、明確選擇不被覆蓋、add_paired）；既有 BLE 測試改為注入假的已配對清單與連線狀態，不碰真實系統；pytest 307、dotnet 130 通過
+- 實機：以真實設定檔（只有 ES850NB、selected 空）跑 C# 連線，自動連上 MP330 並把它加入清單
+- 版本 1.0.5 → 1.0.6，安裝檔 C:\Work\installer-out\EdifierTray-Setup-1.0.6.exe
+
+### 待辦事項（TODO）
+- 安裝 1.0.6 後確認托盤自動顯示 MP330；未 commit、未打標籤、未 push
+- 尚未連過的全新裝置：要先在 Windows 完成配對（配對需使用者操作），之後才會自動出現；配對後最久約等一次退避重連（≤30 秒）
+
+### MP330 連線穩定、輸出裝置切換、升版 1.0.7（Changes）
+- 原因：重複 MP330＝啟動補入／連線前補入／掃描同時改清單，Remember 的檢查與新增沒鎖；常顯示未連線＝BleGattTransport 關閉時沒釋放 GATT 服務，同一台再連取不到 characteristic（托盤開著時再開 --cli 可重現）
+- Settings.cs：Remember／Save 加鎖；BleGattTransport.cs：Dispose 時取消訂閱並釋放服務與裝置，取 characteristic 失敗重試 4 次
+- 新增 Service/AudioOutputs.cs：列出作用中播放端點（排除 Hands-Free），以 IPolicyConfig 設為預設（Console＋Multimedia，不動通訊角色）；TrayMenuModel／TrayHost 新增「輸出裝置」區（代號 out:<端點代號>），結果顯示在 OSD；strings.json 新增 m.outputs、o.output_switched、e.output_failed（四語言）
+- 實機：列出 7 個輸出裝置、SetDefault(目前預設) 成功、MP330 BLE 連續開關重連 4 次皆成功；測試 dotnet 131、pytest 通過；安裝檔 EdifierTray-Setup-1.0.7.exe
+- 實機驗證時關閉了使用者執行中的托盤（--cli 與托盤搶 BLE 連線）
+
+### 問題與解法（Problems & Solutions）
+- MP330 自動關機評估：D8 旗標 b8（無音訊自動關機）為 0，官方 App 對 MP330 不提供此設定；旗標有 b23_isSupportSavingMode（指令 0xB1 查詢／0xB2 設定，payload 未逆向），推測是省電待機，未驗證
+- 可行路徑：(A) 讀 0xB1 再改 0xB2（需先逆向 payload、屬未觀察過的指令，須取得同意）；(B) 軟體保活：對 MP330 端點持續播放聽不到的訊號（不碰裝置，但韌體是否算有訊號未知）
+
+### 待辦事項（TODO）
+- Python 版托盤未做輸出裝置切換（只做 C#）
+- 輸出切換後音量按鈕仍作用於 Edifier 端點，未跟隨新的預設輸出
+- MP330 保持開機：待使用者決定走 (A) 或 (B)；未 commit、未打標籤、未 push
+
+### 保持開機（防自動關機）方案 B、升版 1.0.8（Changes）
+- 新增 Service/KeepAwake.cs：對指定裝置的播放端點持續送出約 -50 dBFS、25 Hz 的正弦波（喇叭重現不出來），依端點名稱片段找裝置，所有 Edifier 機種通用；Reconcile 讓串流與想保持開機的裝置一致，端點出現／消失（連上／斷線）自動開始／停止
+- Settings.cs：KnownDevice.KeepAwake（keepAwake）；TrayHost.cs：每 20 秒對齊、選單項目 keepawake 切換目前裝置並存檔、OSD 提示；TrayMenuModel.cs：m.keep_awake 項目；strings.json 新增 m.keep_awake、o.keep_awake_on／off（四語言）
+- 測試：dotnet 136 通過（串流跟隨、端點缺失重試、名稱片段、音量位準）；pytest 307 通過
+- 實機：對 MP330 端點開啟後音量表讀到 0.003，停止後歸零（確認訊號有送到端點）；安裝檔 EdifierTray-Setup-1.0.8.exe
+
+### 問題與解法（Problems & Solutions）
+- 韌體是否把這種訊號當成「有音訊」仍未驗證：需開啟後放著超過 MP330 的待機時間才知道；若無效可調高 KeepAwake.Amplitude 或改走 0xB1／0xB2 省電模式（需逆向 payload，先取得同意）
+
+### 待辦事項（TODO）
+- 使用者實測 MP330 開啟「保持開機」後是否仍自動關機；有效再評估其他機種
+- Python 版托盤未做輸出裝置切換與保持開機；未 commit、未打標籤、未 push
+
+### 研究方案 A：改裝置設定防閒置關機（Changes）
+- 逆向環境：C:/tmp/re/（jadx 1.5.6、解開的 apkm 與反編譯輸出 out/，不進版控）；用 aapt2 讀 App 字串
+- 結論（反編譯碼 CommandManager／CommandParser／PowerSaveModeActivity）：省電模式 0xB1 查詢／0xB2 設定，payload 1 byte（1 開 0 關），回應 P[0]==1 為開；無音訊自動關機 0xD7／0xD6 同格式，但 MP330 的 D8 b8=0 不支援；MP330 的 b23 省電模式旗標=1
+- App 說明文字：開啟時閒置 15 分鐘進省電待機（有藍牙連線）或關機（無連線），有版本寫電池供電 30 分鐘 → 關閉省電模式應可避免自動關機（推論，未實機驗證）
+- 程式：requests.py（set_power_save、set_auto_shutdown_no_input）、responses.py（parse_power_save、parse_auto_shutdown_no_input）、sim.py（省電模式回送）、cli.py（power-save 子命令：預設只讀，--set 須 --yes，印原值與還原指令並讀回確認）、tests/test_power_save.py（8 項）；docs/protocol-commands.md 新增章節
+- 尚未對 MP330 送出任何 0xB1／0xB2（依專案規則需先取得同意）
+
+### 待辦事項（TODO）
+- 取得同意後：對 MP330 實測 power-save 讀取，再視結果設定；有效後把「A 優先、不支援才用 B」做進托盤（讀 D8 b23／b8 旗標決定）
+
+### MP330 省電模式實測（只讀，同日追加）
+- cli.py：power-save 新增 --model（只在記憶體挑對象，不改設定檔；先 add_paired）
+- 實機（使用者同意只讀）：對 MP330 送 0xB1 查詢，回應「省電模式：開」→ 確認 MP330 有此設定且目前開啟，與自動關機現象吻合；未送任何設定指令
+- 下一步（待同意）：uv run edifier-reverse power-save --model MP330 --set off --yes，然後觀察是否仍閒置關機；還原：--set on --yes
+
+### MP330 省電模式已關閉（同日追加）
+- 使用者同意後執行 power-save --model MP330 --set off --yes：開 → 關，讀回確認為關；另開一次連線重新查詢仍為關（設定有保留）
+- 還原：uv run edifier-reverse power-save --model MP330 --set on --yes
+
+### 待辦事項（TODO）
+- 使用者放置超過原本待機時間，確認 MP330 不再閒置關機；有效再把「A 優先、不支援才用 B」做進托盤
+
+### 選單依大項收折、保持開機移出裝置區、升版 1.0.9（Changes）
+- TrayMenuModel.cs：新增 EntryKind.Section（代號 sec:<名稱>，Checked＝展開，Detail＝目前狀態摘要）；大項：anc、devices、output、power、look；Build 新增 expanded 參數（null＝全展開，供既有測試與展示）；音量與底部動作不收折
+- 保持開機改放「電源」大項（原本接在裝置清單的重新掃描後面）；外觀與語言合併為「外觀與語言」大項
+- TrayMenuWindow.xaml.cs：BuildSection（標題列、摘要、箭頭，點了不關選單）、Relayout（展開／收起後依游標位置重新擺放）
+- Settings.cs：expandedSections（預設只展開 anc）；TrayHost.cs：sec: 處理並重建選單；strings.json 新增 m.power、m.on、m.look_and_lang（四語言）
+- Cli.cs：--menu-shot 新增 collapsed 情境並帶入輸出裝置與保持開機；用「渲染元素成圖片」確認版面（收折與展開各一張）
+- 測試：dotnet 139、pytest 315 通過；安裝檔 EdifierTray-Setup-1.0.9.exe
+
+### 待辦事項（TODO）
+- Python 版托盤選單（menu.py）未做收折、輸出裝置、保持開機；未 commit、未打標籤、未 push
+- 使用者實測 MP330 關閉省電模式後是否仍閒置關機
+
+### 選單改為滑鼠移上去、右側彈出子選單、升版 1.0.10（Changes）
+- 取代 1.0.9 的原地收折（使用者要的是 Windows 右鍵選單那種階層子選單）：MenuEntry.Children；TrayMenuModel 的大項（anc、devices、output、power、look）各帶子項目；移除 expanded 參數、Settings.ExpandedSections、TrayHost.ToggleSection、Relayout
+- TrayMenuWindow.xaml.cs：大項標題列顯示狀態摘要與向右箭頭；滑鼠移入 120 ms 後彈出子選單，換大項即切換，移到其他列或離開 280 ms 後收起，主選單收起／關閉時一起關；子選單用獨立無邊框視窗（Popup 的視窗銷毀是非同步，會讓測試主機收尾時當機），貼在主選單右側，右邊放不下翻到左側，垂直對齊該列並夾在工作區內
+- 測試：MenuTests 改以 Children 驗證（大項、摘要、無內容的大項不出現、保持開機在電源底下）；FlyoutTests 新增子選單彈出／切換／收起／隨主選單關閉；用 MenuTestUtil.Flat 攤平供其他選單測試使用；dotnet 139、pytest 315 通過，連跑多次穩定
+- Cli.cs：--menu-shot 會輸出各大項子選單圖與實際彈出位置檢查，新增 right 情境（貼右緣）；實測：預設在右側、貼右緣時翻到左側，皆在工作區內
+- 版本 1.0.9 → 1.0.10，安裝檔 EdifierTray-Setup-1.0.10.exe
+
+### 待辦事項（TODO）
+- 尚未安裝實測真實滑鼠的移動手感（延遲 120／280 ms 可能要依手感調整）；Python 版托盤選單未做；未 commit、未打標籤、未 push
+
+### 托盤原生的省電模式檢查與防自動關機、升版 1.0.11（Changes）
+- 原因：使用者在 MP330 控制頁找不到原生的防自動關機按鈕——方案 A 當時只做到命令列 power-save，沒接進托盤；使用者要求至少先有「檢查目前是不是省電模式」
+- Protocol/Packet.cs：Cmd.SavingModeQuery 0xB1／SavingModeSet 0xB2
+- DeviceService.cs：DeviceState.PowerSave（bool?，null＝不支援）；連上後背景查一次（1.5 秒逾時，不擋連線，ES850NB 沒回應就維持 null）；CheckPowerSaveAsync（唯讀重新檢查）、SetPowerSaveAsync（送設定後讀回確認，不支援就不送）
+- TrayMenuModel.cs：「電源」大項有省電模式時顯示摘要「省電模式：開／關」，子項目「檢查省電模式」與「防自動關機（關閉省電模式）」；沒有（ES850NB）退回 B「保持開機」
+- FlyoutWindow.xaml(.cs)：面板新增電源區（只在查得到省電模式時顯示）：目前狀態＋檢查、防自動關機開關；TrayHost.cs 接 powercheck／powersave，結果顯示在 OSD
+- strings.json 新增 m.off、m.power_state、m.power_check、m.no_auto_off、o.auto_off_on/off、e.power_save_unsupported（四語言）
+- 測試：dotnet 144（新增 PowerSaveTests 4 項、選單 1 項）、pytest 315 通過；面板渲染圖確認 MP330／ES850NB 兩種畫面；安裝檔 EdifierTray-Setup-1.0.11.exe
+
+### 問題與解法（Problems & Solutions）
+- C# 版對真實 MP330 的實機驗證被使用者正在跑的托盤擋住（BLE 連線被它獨占，AccessDenied），未關閉使用者的程式；Python CLI 先前已對真機讀取與設定成功（協定層已驗證），C# 這條路待安裝後驗證
+
+### 待辦事項（TODO）
+- 安裝 1.0.11 後確認 MP330 面板顯示「省電模式：關」（先前已用 CLI 關閉），並觀察閒置是否仍自動關機
+- Python 版托盤未做；未 commit、未打標籤、未 push
+
+### 文件同步與 push 前檢查（同日追加）
+- README.md：驗證表加 MP330 欄、特色加階層選單／輸出裝置／防自動關機並註明 Python 版托盤尚無、命令列表加 power-save、測試數量 315／144、Roadmap 更新；docs/images/tray-menu-dark.png 換成新的階層選單（示範資料，不含真實位址）
+- docs/findings.md（最後更新日、單元測試數、MP330 實機結果與風險列）、docs/tool-design.md（新增第 7 節）、docs/protocol-uuids.md（MP330 BLE 已驗證）、docs/protocol-d8.md（MP330 實機回應）、docs/handoff-other-pc.md（註記）、CLAUDE.md（MP330 現況、C# 領先 Python）
+- push 前掃描發現：測試裡有真實裝置的藍牙位址（MP330、ES850NB）→ 全部改成假位址（AA:BB:B3:… → AA:BB:B0:…，保留 B3→B0 的推導關係）；重跑兩邊測試確認

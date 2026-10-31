@@ -4,6 +4,8 @@
 
 用途：查詢 `0xD8`（216），空 payload。回應的每個位元組描述裝置一類能力，App 靠它決定顯示哪些功能。**要知道 ES850NB / MP330 支援什麼，第一件事就是送這個查詢。**
 
+實機回應（2026-10-31）：MP330 為 `00 01 01 05 01 01 00 00 00 02 01 01 0a 28 01 00 30 a0 00 03 00 20 40 11 00 00`（26 bytes），開啟的旗標含 `b23_isSupportSavingMode`（省電模式）、`b19_isSupportInputSourceSettings`、`b19_isSupportVolumeSettings`、`b21_isBeepSet`、`b17_isSupportDeviceResetSettings`；`b8`（無音訊自動關機）為 0，沒有降噪相關旗標。
+
 規則：`payload[N]` 對應欄位 `bN`；長度不足 N+1 時該欄位保持預設（不支援）。位元編號 `bit0` 為最低位。
 
 ## 整位元組欄位
