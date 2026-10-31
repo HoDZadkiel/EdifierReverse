@@ -90,7 +90,7 @@ wheels = [
 
 [[package]]
 name = "edifier-reverse"
-version = "1.0.4"
+version = "1.0.11"
 source = { editable = "." }
 dependencies = [
     { name = "bleak" },

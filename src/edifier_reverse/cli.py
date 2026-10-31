@@ -165,6 +165,40 @@ async def run_service(connector, args) -> None:
         await svc.stop()
 
 
+async def run_power_save(connector, args) -> None:
+    """讀取省電模式；--set 時改成指定值並讀回確認。設定前先印出原值，方便還原。connector 可注入，方便離線測試。"""
+    from . import commands as C
+    from .client import Client, ResponseTimeout
+    from .requests import query, set_power_save
+    from .responses import parse_power_save
+
+    async def read(client) -> bool:
+        return parse_power_save((await client.request(query(C.SAVING_MODE_QUERY))).payload)
+
+    transport, session = await connector()
+    client = Client(transport, session, timeout=args.timeout)
+    try:
+        try:
+            before = await read(client)
+        except ResponseTimeout:
+            raise SystemExit("錯誤：裝置沒有回應省電模式查詢，這個機種可能沒有此設定")
+        print(f"省電模式：{'開' if before else '關'}")
+        if args.set is None:
+            return
+        want = args.set == "on"
+        if want == before:
+            print("已經是這個值，不送出任何設定")
+            return
+        await client.request(set_power_save(want))
+        after = await read(client)
+        print(f"已設定：{'開' if before else '關'} → {'開' if after else '關'}"
+              f"（要還原：power-save --set {'on' if before else 'off'} --yes）")
+        if after != want:
+            raise SystemExit("錯誤：讀回的值與設定不同，裝置可能沒有採用")
+    finally:
+        await transport.close()
+
+
 async def _list_devices() -> None:
     from .ble import discover_all, profile_for
 
@@ -203,6 +237,12 @@ def main(argv=None) -> None:
     si.add_argument("--chunk", type=int, help="把回應切成每片 N 位元組")
     si.add_argument("--spp", action="store_true", help="改用真的 socket 對跑，測 SPP 傳輸層")
 
+    ps = sub.add_parser("power-save", help="讀取（或用 --set 改）裝置的省電模式；關閉可避免閒置自動關機／待機")
+    ps.add_argument("--set", choices=["on", "off"], help="改成指定值（會改變裝置的設定，須同時加 --yes）")
+    ps.add_argument("--yes", action="store_true", help="確認要改變裝置設定")
+    ps.add_argument("--model", help="指定機種（例如 MP330）；多台裝置同時連著時用來挑對象，不會改動設定檔的選用裝置")
+    ps.add_argument("--timeout", type=float, default=5.0, help="等待回應的秒數")
+
     sub.add_parser("tray", help="啟動托盤小工具（需要 uv sync --extra tray）")
 
     st = sub.add_parser("status", help="連線並印出名稱、韌體、電量、ANC 狀態（只讀）")
@@ -223,6 +263,19 @@ def main(argv=None) -> None:
         except ImportError as e:
             raise SystemExit(f"錯誤：缺少選用相依（{e}）。請執行 uv sync --extra tray")
         tray_main()
+    elif args.cmd == "power-save":
+        if args.set and not args.yes:
+            raise SystemExit("錯誤：--set 會改變裝置設定，請加上 --yes 確認")
+        from .devices import DeviceDirectory
+
+        directory = DeviceDirectory(save=lambda _s: None)  # 不寫回設定檔
+        if args.model:
+            asyncio.run(directory.add_paired())  # 把 Windows 已配對的 Edifier 裝置補進（記憶體內）清單
+            dev = next((d for d in directory.settings.devices if d.model.upper() == args.model.upper()), None)
+            if dev is None:
+                raise SystemExit(f"錯誤：設定檔裡沒有 {args.model}，請確認它已在 Windows 配對")
+            directory.settings.selected = dev.a2dp  # 只在記憶體
+        asyncio.run(run_power_save(directory.connector(), args))
     elif args.cmd in ("status", "anc"):
         from .devices import make_connector
         asyncio.run(run_service(make_connector(args.model), args))

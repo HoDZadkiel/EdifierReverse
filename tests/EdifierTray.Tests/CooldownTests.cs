@@ -80,7 +80,7 @@ public class CooldownTests
     [Fact] public void Menu_disables_anc_items_during_cooldown_but_keeps_the_current_mode_marked()
     {
         var s = new DeviceState(true, "EDIFIER ES850NB", "1.0.1", 16, new AncState(16, 2), Cooling: true);
-        var m = TrayMenuModel.Build(s, 50, false, false);
+        var m = MenuTestUtil.Flat(TrayMenuModel.Build(s, 50, false, false));
         Assert.All(m.Where(e => e.Id.StartsWith("anc:")), e => Assert.False(e.Enabled));
         Assert.True(m.Single(e => e.Id == "anc:2").Checked);
         Assert.True(m.Single(e => e.Id == "mute").Enabled);  // 音量不受冷卻影響

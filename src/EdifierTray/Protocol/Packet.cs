@@ -14,6 +14,7 @@ public class PacketException : Exception
 public static class Cmd
 {
     public const byte OtaReady = 0x10, OtaStartMaster = 0x11, OtaStartSub = 0x12;   // 韌體更新：永遠封鎖
+    public const byte SavingModeQuery = 0xB1, SavingModeSet = 0xB2;   // 省電模式（官方 App 反編譯碼；MP330 實機讀取與設定皆已驗證）
     public const byte AncSet = 0xC1, VersionQuery = 0xC6, NameQuery = 0xC9, AncQuery = 0xCC, BatteryQuery = 0xD0;
 }
 

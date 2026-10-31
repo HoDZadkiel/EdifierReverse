@@ -10,6 +10,7 @@ public sealed class KnownDevice
     [JsonPropertyName("version")] public int Version { get; set; } = 2;
     [JsonPropertyName("encryption")] public int Encryption { get; set; }
     [JsonPropertyName("name")] public string Name { get; set; } = "";   // 連上後由 0xC9 取得
+    [JsonPropertyName("keepAwake")] public bool KeepAwake { get; set; }   // 持續送出聽不到的訊號，防止裝置因無音訊而自動關機
     [JsonPropertyName("model")] public string Model { get; set; } = "Edifier";  // 辨識出的機種（目錄名稱）；不在目錄的為 "Edifier"
 
     /// <summary>位址後四碼，用來區分同型號的多台裝置。</summary>
@@ -35,11 +36,14 @@ public sealed class Settings
     /// <summary>新增或更新（保留已知的名稱）。</summary>
     public void Remember(KnownDevice dev)
     {
-        var old = Device(dev.A2dp);
-        if (old is null) { Devices.Add(dev); return; }
-        if (dev.Ble != "") old.Ble = dev.Ble;
-        old.Version = dev.Version; old.Encryption = dev.Encryption; old.Model = dev.Model;
-        if (dev.Name != "") old.Name = dev.Name;
+        lock (this)   // 啟動補入、連線前補入、掃描會同時進來，檢查與新增要一氣呵成，否則同一台會被加兩次
+        {
+            var old = Device(dev.A2dp);
+            if (old is null) { Devices.Add(dev); return; }
+            if (dev.Ble != "") old.Ble = dev.Ble;
+            old.Version = dev.Version; old.Encryption = dev.Encryption; old.Model = dev.Model;
+            if (dev.Name != "") old.Name = dev.Name;
+        }
     }
 
     public KnownDevice? CurrentDevice() =>
@@ -66,7 +70,9 @@ public sealed class Settings
         {
             path ??= DefaultPath;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+            string json;
+            lock (this) json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+            File.WriteAllText(path, json);
         }
         catch { /* 寫不進去不影響功能（只是下次不記得設定） */ }
     }

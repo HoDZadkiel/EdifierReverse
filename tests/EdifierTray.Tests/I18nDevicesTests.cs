@@ -158,12 +158,17 @@ public class DirectoryTests
     static (DeviceDirectory dir, List<int> saves) Make(params (string A2dp, string Ble)[] found) => Make(null, found);
 
     /// <param name="unpaired">視為沒配對的位址；其餘都視為已配對。</param>
-    static (DeviceDirectory dir, List<int> saves) Make(HashSet<string>? unpaired, params (string A2dp, string Ble)[] found)
+    static (DeviceDirectory dir, List<int> saves) Make(HashSet<string>? unpaired, params (string A2dp, string Ble)[] found) =>
+        Make(unpaired, null, found);
+
+    /// <param name="paired">Windows 已配對的 (位址, 名稱)，預設空（不碰真實系統）。</param>
+    static (DeviceDirectory dir, List<int> saves) Make(HashSet<string>? unpaired, List<(string A2dp, string Name)>? paired, params (string A2dp, string Ble)[] found)
     {
         var saves = new List<int>();
         var dir = new DeviceDirectory(new Settings(), _ => saves.Add(1), (t, ct) => Task.FromResult(found.Select(f =>
             new Discovery.Found(f.A2dp, new Session(2, 16), "ES850NB", f.Ble, -60)).ToList()),
-            a => Task.FromResult(!(unpaired?.Contains(a) ?? false)));
+            a => Task.FromResult(!(unpaired?.Contains(a) ?? false)),
+            () => Task.FromResult(paired ?? new List<(string A2dp, string Name)>()));
         return (dir, saves);
     }
 
@@ -235,12 +240,74 @@ public class DirectoryTests
         Assert.Equal(n + 1, saves.Count);
     }
 
-    [Fact] public async Task A_ble_only_model_is_reported_instead_of_connecting_over_spp()
+    [Fact] public async Task A_ble_only_model_connects_over_ble_with_its_catalog_service_and_never_over_spp()
+    {
+        var s = new Settings();
+        s.Devices.Add(new KnownDevice { A2dp = "AA:BB:B3:11:22:33", Ble = "AA:BB:B0:11:22:33", Model = "MP330" });
+        (string, string)? called = null;
+        var dir = new DeviceDirectory(s, _ => { }, pairedLister: NoPaired, isConnected: _ => Task.FromResult(false),
+            bleConnect: (addr, svc) => { called = (addr, svc); throw new IOException("stub"); });
+        await Assert.ThrowsAsync<IOException>(() => dir.MakeConnector()(CancellationToken.None));
+        Assert.Equal(("AA:BB:B0:11:22:33", "48094c01-1a48-11e9-ab14-d663bd873d93"), called);
+    }
+
+    [Fact] public async Task A_ble_only_model_without_a_ble_address_is_reported_not_found()
     {
         var s = new Settings();
         s.Devices.Add(new KnownDevice { A2dp = "AA:AA:AA:AA:AA:01", Model = "MP330" });
-        var ex = await Assert.ThrowsAsync<IOException>(() => new DeviceDirectory(s, _ => { }).MakeConnector()(CancellationToken.None));
-        Assert.Contains("BLE", ex.Message);
+        var ex = await Assert.ThrowsAsync<IOException>(() => new DeviceDirectory(s, _ => { }, pairedLister: NoPaired, isConnected: _ => Task.FromResult(false)).MakeConnector()(CancellationToken.None));
+        Assert.Contains("MP330", ex.Message);
+    }
+
+    [Fact] public async Task Paired_device_without_advert_is_added_with_derived_ble_address_and_verified_session()
+    {
+        Assert.Equal("AA:BB:B0:11:22:33", DeviceDirectory.FallbackBleAddress("AA:BB:B3:11:22:33"));   // 格式與實機相同：第三個 byte B3 → B0（MP330）
+        Assert.Equal("AA:BB:B0:44:55:66", DeviceDirectory.FallbackBleAddress("AA:BB:B3:44:55:66"));   // 格式與實機相同（ES850NB）
+        var (d, saves) = Make(null, new List<(string, string)> { ("AA:BB:B3:11:22:33", "EDIFIER MP330"), ("AA:AA:AA:AA:AA:09", "EDIFIER ZZ999") });
+        var got = await d.ScanAsync(TimeSpan.Zero);
+        var mp = got.Single(x => x.Model == "MP330");
+        Assert.Equal(("AA:BB:B0:11:22:33", 2, 0, "EDIFIER MP330"), (mp.Ble, mp.Version, mp.Encryption, mp.Name));  // MP330 實機不加密，不能套 ES850NB 的 16
+        var other = got.Single(x => x.Model != "MP330");
+        Assert.Equal(("Edifier", 0), (other.Model, other.Encryption));
+        Assert.Equal(16, DeviceDirectory.FallbackSession("ES850NB").Encryption);
+        Assert.NotEmpty(saves);
+    }
+
+    static Task<List<(string A2dp, string Name)>> NoPaired() => Task.FromResult(new List<(string A2dp, string Name)>());   // 不碰真實系統的已配對清單
+
+    static DeviceDirectory TwoModels(string selected, HashSet<string> connected, List<string> bleCalls)
+    {
+        var s = new Settings { Selected = selected };
+        s.Devices.Add(new KnownDevice { A2dp = "AA:BB:B3:44:55:66", Ble = "AA:BB:B0:44:55:66", Model = "ES850NB", Encryption = 16 });
+        s.Devices.Add(new KnownDevice { A2dp = "AA:BB:B3:11:22:33", Ble = "AA:BB:B0:11:22:33", Model = "MP330" });
+        return new DeviceDirectory(s, _ => { }, pairedLister: () => Task.FromResult(new List<(string, string)>()),
+            isConnected: a => Task.FromResult(connected.Contains(a)),
+            bleConnect: (addr, svc) => { bleCalls.Add(addr); throw new IOException("stub"); });
+    }
+
+    [Fact] public async Task Without_an_explicit_choice_the_device_that_is_connected_over_bluetooth_is_used()
+    {
+        // 使用者的實際情況：清單第一台是沒開機的 ES850NB，MP330 已連上電腦 → 應連 MP330（BLE），不去等 ES850NB 的 SPP
+        var calls = new List<string>();
+        var dir = TwoModels("", new HashSet<string> { "AA:BB:B3:11:22:33" }, calls);
+        await Assert.ThrowsAsync<IOException>(() => dir.MakeConnector()(CancellationToken.None));
+        Assert.Equal(new[] { "AA:BB:B0:11:22:33" }, calls);
+    }
+
+    [Fact] public async Task An_explicit_choice_is_kept_even_when_another_device_is_the_one_connected()
+    {
+        var calls = new List<string>();
+        var dir = TwoModels("AA:BB:B3:11:22:33", new HashSet<string> { "AA:BB:B3:44:55:66" }, calls);   // 選了 MP330，但連著的是 ES850NB
+        await Assert.ThrowsAsync<IOException>(() => dir.MakeConnector()(CancellationToken.None));
+        Assert.Equal(new[] { "AA:BB:B0:11:22:33" }, calls);   // 仍只連 MP330，不擅自改選
+    }
+
+    [Fact] public async Task Fallback_does_not_override_advertised_devices()
+    {
+        var (d, _) = Make(null, new List<(string, string)> { (Two[0].Item1, "EDIFIER ES850NB") }, Two[0]);
+        var got = await d.ScanAsync(TimeSpan.Zero);
+        Assert.Single(got);
+        Assert.Equal(16, got[0].Encryption);   // 有廣播就用廣播的 Session
     }
 }
 
@@ -252,17 +319,17 @@ public class MenuSectionsTests : IDisposable
 
     [Fact] public void Menu_lists_devices_with_the_selected_one_checked_and_a_rescan_item()
     {
-        var m = TrayMenuModel.Build(Conn(), 50, false, false, new[] { ("A1", "ES850NB · 01", false), ("A2", "ES850NB · 02", true) });
+        var m = MenuTestUtil.Flat(TrayMenuModel.Build(Conn(), 50, false, false, new[] { ("A1", "ES850NB · 01", false), ("A2", "ES850NB · 02", true) }));
         Assert.Equal(new[] { ("dev:A1", false), ("dev:A2", true) }, m.Where(e => e.Id.StartsWith("dev:")).Select(e => (e.Id, e.Checked)));
         Assert.True(m.Single(e => e.Id == "rescan").Enabled);
-        var busy = TrayMenuModel.Build(Conn(), 50, false, false, scanning: true);
+        var busy = MenuTestUtil.Flat(TrayMenuModel.Build(Conn(), 50, false, false, scanning: true));
         Assert.False(busy.Single(e => e.Id == "rescan").Enabled);
         Assert.DoesNotContain(busy, e => e.Id.StartsWith("dev:"));     // 沒有裝置時只有停用的提示列
     }
 
     [Fact] public void Menu_has_theme_and_language_segments_marking_the_current_choice()
     {
-        var segs = TrayMenuModel.Build(Conn(), 50, false, false, theme: "dark", language: "ja").Where(e => e.Kind == EntryKind.Segmented).ToList();
+        var segs = MenuTestUtil.Flat(TrayMenuModel.Build(Conn(), 50, false, false, theme: "dark", language: "ja")).Where(e => e.Kind == EntryKind.Segmented).ToList();
         Assert.Equal(new[] { "theme:system", "theme:light", "theme:dark" }, segs[0].Options!.Select(o => o.Id));
         Assert.Equal(new[] { "lang:zh-TW", "lang:zh-CN", "lang:en", "lang:ja" }, segs[1].Options!.Select(o => o.Id));
         Assert.Equal(new[] { "theme:dark" }, segs[0].Options!.Where(o => o.Selected).Select(o => o.Id));
@@ -272,11 +339,11 @@ public class MenuSectionsTests : IDisposable
     [Fact] public void Menu_text_follows_the_language()
     {
         Strings.SetLanguage("en");
-        var m = TrayMenuModel.Build(Conn(), 50, true, false);
+        var m = MenuTestUtil.Flat(TrayMenuModel.Build(Conn(), 50, true, false));
         Assert.Equal("Unmute", m.Single(e => e.Id == "mute").Text);
         Assert.Equal("Quit", m.Single(e => e.Id == "quit").Text);
         Strings.SetLanguage("ja");
-        Assert.Equal("パネルを開く", TrayMenuModel.Build(Conn(), 50, false, false).Single(e => e.Id == "open").Text);
+        Assert.Equal("パネルを開く", MenuTestUtil.Flat(TrayMenuModel.Build(Conn(), 50, false, false)).Single(e => e.Id == "open").Text);
     }
 }
 

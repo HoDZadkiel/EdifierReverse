@@ -174,13 +174,13 @@ class TrayApp:
 
             loop, svc = self.runner.loop, self.runner.service
             self.watcher = ConnectionWatcher(lambda: loop.call_soon_threadsafe(svc.notify_device_available))
-        cur = self.directory.current()
-        self.runner.submit(self.watcher.watch(cur.a2dp if cur is not None else ""))
+        self.runner.submit(self.watcher.watch([d.a2dp for d in self.directory.devices]))  # 全部已知裝置：哪台連上就連哪台
 
     async def _prune_and_watch(self) -> None:
         """啟動時清掉已不再配對的已知裝置，再開始監看；失敗不影響其他功能。"""
         try:
             await self.directory.prune_unpaired()
+            await self.directory.add_paired()
         except Exception:
             pass
         self.post(self._watch_current)

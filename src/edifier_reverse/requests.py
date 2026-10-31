@@ -39,6 +39,17 @@ def set_eq(rr: int, calibration: Optional[_eq.EqCalibration] = None) -> Request:
     return Request(C.EQ_SET, payload)
 
 
+def set_power_save(on: bool) -> Request:
+    """0xB2：省電模式開關，payload 1 byte（1 開、0 關）。官方 App 的「省電模式」頁（ConneX 1.0.31，靜態分析，未實機驗證）。
+    開著時裝置閒置（無音訊、無操作）15 或 30 分鐘後進入省電待機或自動關機，依機種而異；關掉就不會。"""
+    return Request(C.SAVING_MODE_SET, bytes([1 if on else 0]))
+
+
+def set_auto_shutdown_no_input(on: bool) -> Request:
+    """0xD6：無音訊輸入自動關機開關，payload 1 byte（1 開、0 關）。只有功能旗標 b8 為 1 的機種有（MP330 為 0，不支援）。靜態分析，未實機驗證。"""
+    return Request(C.AUTO_SHUTDOWN_WITHOUT_AUDIO_SET, bytes([1 if on else 0]))
+
+
 def set_custom_eq_band(eq_index: int, index: int, freq: int, gain: int, **kw) -> Request:
     """0x44：單一頻段。kw 可帶 byte0、filter、q。"""
     return Request(C.CUSTOM_EQ_SET, _eq.encode_set_band(eq_index, index, freq, gain, **kw))

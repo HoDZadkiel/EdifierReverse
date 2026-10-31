@@ -284,3 +284,28 @@ def test_device_available_notice_does_not_drop_a_healthy_connection():
             await svc.stop()
 
     assert run(go()) == (1, True)
+
+
+def test_has_anc_is_false_when_the_device_never_answers_the_anc_query_and_true_again_after_it_does():
+    # MP330：沒有 ANC，查詢無回應；電量查詢有回應所以連線仍成立
+    async def go():
+        devices = []
+
+        async def connector():
+            dev = SimulatedDevice(SESSION)
+            del dev.state[C.ANC_QUERY]
+            devices.append(dev)
+            return dev, SESSION
+
+        svc = DeviceService(connector, backoff=(0.01,), query_timeout=0.2)
+        svc.start()
+        try:
+            st = await svc.wait_connected(5)
+            assert (st.connected, st.anc, st.has_anc) == (True, None, False)
+            devices[0].state[C.ANC_QUERY] = bytes([16, 2])   # 之後有回應（例如暫時逾時後恢復）就不再隱藏
+            await svc._refresh()
+            return svc.state
+        finally:
+            await svc.stop()
+
+    assert run(go()).has_anc is True

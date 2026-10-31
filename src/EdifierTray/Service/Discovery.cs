@@ -2,6 +2,7 @@ using EdifierTray.Protocol;
 using EdifierTray.Transport;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
+using Windows.Devices.Enumeration;
 using Windows.Storage.Streams;
 
 namespace EdifierTray.Service;
@@ -72,6 +73,29 @@ public static class Discovery
             return dev?.DeviceInformation.Pairing.IsPaired ?? false;
         }
         catch (Exception) { return true; }
+    }
+
+    /// <summary>這台電腦目前是否已用經典藍牙連著該裝置（耳機／喇叭開機並連上）。查不到回傳 false。</summary>
+    public static async Task<bool> IsConnectedAsync(string a2dpAddress)
+    {
+        try
+        {
+            using var dev = await BluetoothDevice.FromBluetoothAddressAsync(RfcommTransport.ParseAddress(a2dpAddress));
+            return dev?.ConnectionStatus == BluetoothConnectionStatus.Connected;
+        }
+        catch (Exception) { return false; }
+    }
+
+    /// <summary>Windows 已配對、名稱以 EDIFIER 開頭的裝置（經典藍牙位址, 名稱）。查不到回傳空清單。已連著電腦的裝置不再廣播，這是備援來源。</summary>
+    public static async Task<List<(string A2dp, string Name)>> PairedEdifierDevicesAsync()
+    {
+        try
+        {
+            var infos = await DeviceInformation.FindAllAsync(BluetoothDevice.GetDeviceSelectorFromPairingState(true));
+            return infos.Where(i => i.Name.StartsWith("EDIFIER ", StringComparison.OrdinalIgnoreCase) && i.Id.Contains('-'))
+                        .Select(i => (i.Id[(i.Id.LastIndexOf('-') + 1)..].ToUpperInvariant(), i.Name)).ToList();
+        }
+        catch (Exception) { return new(); }
     }
 
     /// <summary>命令列與自動化用：依設定檔的選用裝置連線。</summary>

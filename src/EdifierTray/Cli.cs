@@ -122,7 +122,12 @@ public static class Cli
         Theme.DarkOverride = !light;
         Theme.Apply(!light); Strings.ApplyToResources(Application.Current.Resources);
         var host = new TrayHost(_ => throw new InvalidOperationException(), new VolumeControl("X", _ => new DemoEndpoint()), withTray: false);
-        var demo = new DeviceState(true, "EDIFIER ES850NB", "1.0.1", 16, new AncState(16, 4, 8), Cooling: cooling);
+        // lang 之後加 ":mp330" 可看沒有降噪、有省電模式的面板（MP330）
+        bool mp330 = lang.EndsWith(":mp330");
+        lang = lang.Replace(":mp330", "");
+        Strings.SetLanguage(lang); Strings.ApplyToResources(Application.Current.Resources);
+        var demo = mp330 ? new DeviceState(true, "EDIFIER MP330", "1.0.1", 100, null, HasAnc: false, PowerSave: true)
+                         : new DeviceState(true, "EDIFIER ES850NB", "1.0.1", 16, new AncState(16, 4, 8), Cooling: cooling);
         host.Flyout.ApplyState(demo, 50, false);
         host.Flyout.Show(); host.Flyout.HideFlyout();   // 先建立視窗控制代碼（套用背景材質）
         host.Flyout.ApplyState(demo, 50, false);
@@ -159,14 +164,42 @@ public static class Cli
         var host = new TrayHost(_ => throw new InvalidOperationException(), new VolumeControl("X", _ => new DemoEndpoint()), withTray: false);
         var state = scenario == "off" ? new DeviceState() : new DeviceState(true, "EDIFIER ES850NB", "1.0.1", 16, new AncState(16, 2), Cooling: scenario == "cooling");
         var devs = new List<(string, string, bool)> { ("AA:BB:CC:11:22:33", "ES850NB · 22:33", true), ("AA:BB:CC:11:44:55", "ES850NB · 44:55", false) };
-        var entries = TrayMenuModel.Build(state, scenario == "off" ? null : 50, scenario == "muted", scenario == "ok", devs, light ? "light" : "dark", lang);
+        var outs = new[] { new AudioOutput("{A}", "喇叭 (EDIFIER MP330)", true), new AudioOutput("{B}", "耳機 (EDIFIER ES850NB)", false), new AudioOutput("{C}", "LG ULTRAFINE (NVIDIA High Definition Audio)", false) };
+        var entries = TrayMenuModel.Build(state, scenario == "off" ? null : 50, scenario == "muted", scenario == "ok", devs, light ? "light" : "dark", lang,
+                                          outputs: outs, keepAwake: false);
         using (var bmp = LogoRenderer.Render(72, state.Battery, state.Connected))
             host.Menu.Populate(entries, LogoRenderer.ToImageSource(bmp));
         var wa = System.Windows.SystemParameters.WorkArea;
-        host.Menu.ShowAt((int)(wa.Right * 0.6), (int)wa.Bottom);
+        host.Menu.ShowAt((int)(scenario == "right" ? (wa.Right - 4) * System.Windows.Forms.Screen.PrimaryScreen!.Bounds.Width / System.Windows.SystemParameters.PrimaryScreenWidth : wa.Right * 0.6), (int)wa.Bottom);   // right：貼著螢幕右緣（托盤在右下角時的實際情況）
         await Task.Delay(900);
         // 版面：直接渲染元素（不含螢幕內容）；是否真的畫在螢幕上：比較顯示前後同一區域的像素
         RenderElement((FrameworkElement)host.Menu.Content, path, light ? System.Windows.Media.Color.FromRgb(243, 243, 243) : System.Windows.Media.Color.FromRgb(32, 32, 32));
+        // 子選單實際彈出：位置要貼在主選單旁（右側放不下就翻到左側）且在工作區內
+        foreach (var key in new[] { "sec:anc", "sec:devices", "sec:output" })
+        {
+            host.Menu.HoverSection(key);
+            host.Menu.FlushHoverTimers();
+            var main = new System.Windows.Rect(host.Menu.Left, host.Menu.Top, host.Menu.ActualWidth, host.Menu.ActualHeight);
+            var sub = host.Menu.SubmenuBounds;
+            var work = System.Windows.SystemParameters.WorkArea;
+            bool inside = sub is { } sb && sb.Left >= work.Left - 1 && sb.Right <= work.Right + 1 && sb.Top >= work.Top - 1 && sb.Bottom <= work.Bottom + 1;
+            Out($"{key}：主選單 [{main.Left:F0},{main.Right:F0}] 子選單 {(sub is { } s2 ? $"[{s2.Left:F0},{s2.Right:F0}] 上 {s2.Top:F0}" : "未彈出")}  側={(sub is { } s3 ? (s3.Left >= main.Right - 4 ? "右" : "左") : "-")}  在工作區內={inside}");
+        }
+        host.Menu.HoverOtherRow();
+        host.Menu.FlushHoverTimers();
+        Out($"移到別列後：{(host.Menu.SubmenuBounds is null ? "子選單已收起" : "子選單還在")}");
+        // 子選單：滑鼠移到大項上才會彈出，這裡直接把各大項的子選單內容渲染成圖（檔名加 -<大項>）
+        foreach (var sec in entries.Where(e => e.Kind == EntryKind.Section))
+        {
+            var content = host.Menu.BuildSubmenuContent(sec);
+            var w = new Window { WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = System.Windows.Media.Brushes.Transparent,
+                                 SizeToContent = SizeToContent.WidthAndHeight, ShowInTaskbar = false, Left = -4000, Top = 0, Content = content };
+            w.Show();
+            await Task.Delay(250);
+            RenderElement(content, System.IO.Path.ChangeExtension(path, null) + "-" + sec.Id[4..] + ".png",
+                          light ? System.Windows.Media.Color.FromRgb(243, 243, 243) : System.Windows.Media.Color.FromRgb(32, 32, 32));
+            w.Close();
+        }
         using (var after = Grab(host.Menu))
         {
             host.Menu.HideMenu();

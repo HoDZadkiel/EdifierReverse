@@ -102,15 +102,18 @@ def adverts(*items):
     return scanner
 
 
-def directory(scan_items=(), settings=None, unpaired=()):
-    """unpaired：視為沒配對的位址；其餘都視為已配對。"""
+def directory(scan_items=(), settings=None, unpaired=(), paired_list=()):
+    """unpaired：視為沒配對的位址；其餘都視為已配對。paired_list：Windows 已配對的 (位址, 名稱)，預設空（不碰真實系統）。"""
     saves = []
+
+    async def lister():
+        return list(paired_list)
 
     async def is_paired(a2dp):
         return a2dp not in unpaired
 
     d = DeviceDirectory("ES850NB", settings or S.Settings(), save=lambda s: saves.append(1),
-                        scanner=adverts(*scan_items), is_paired=is_paired)
+                        scanner=adverts(*scan_items), is_paired=is_paired, paired_lister=lister)
     return d, saves
 
 
@@ -209,3 +212,67 @@ def test_fallback_name_uses_the_known_device_not_a_hardcoded_model():
     assert DeviceDirectory.fallback_name(None) == "Edifier"
     assert DeviceDirectory.fallback_name(S.KnownDevice("A", model="MP330")) == "MP330"
     assert DeviceDirectory.fallback_name(S.KnownDevice("A", model="MP330", name="EDIFIER X")) == "EDIFIER X"
+
+
+# ---- 已連著電腦的裝置不再廣播：用 Windows 已配對清單補上（MP330 實機情境） ----
+MP = ("AA:BB:B3:11:22:33", "EDIFIER MP330")
+
+
+def test_paired_device_without_advert_is_added_with_derived_ble_address_and_verified_session():
+    from edifier_reverse.devices import fallback_ble_address
+
+    assert fallback_ble_address("AA:BB:B3:11:22:33") == "AA:BB:B0:11:22:33"   # 格式與實機相同：第三個 byte B3 → B0（MP330）
+    assert fallback_ble_address("AA:BB:B3:44:55:66") == "AA:BB:B0:44:55:66"   # 格式與實機相同（ES850NB）
+    d, saves = directory(paired_list=[MP])
+    got = asyncio.run(d.scan())
+    assert [(x.a2dp, x.ble, x.model, x.name) for x in got] == [(MP[0], "AA:BB:B0:11:22:33", "MP330", MP[1])]
+    assert (got[0].version, got[0].encryption) == (2, 0)   # MP330 實機不加密；退回值不能是 ES850NB 的 16
+    assert saves
+
+
+def test_fallback_session_for_es850nb_is_encrypted_and_unknown_models_are_generic():
+    d, _ = directory(paired_list=[("AA:BB:B3:44:55:66", "EDIFIER ES850NB"), ("AA:AA:AA:AA:AA:09", "EDIFIER ZZ999")])
+    a, b = asyncio.run(d.scan())
+    assert (a.model, a.encryption) == ("ES850NB", 16)
+    assert (b.model, b.encryption) == ("Edifier", 0)
+
+
+def test_fallback_does_not_override_advertised_or_known_devices_and_skips_unpaired():
+    d, _ = directory([("AA:BB:B3:11:22:33", "AA:BB:B0:11:22:33")], paired_list=[MP])
+    got = asyncio.run(d.scan())
+    assert len(got) == 1 and got[0].encryption == 16   # 有廣播就用廣播的 Session
+    d, _ = directory(paired_list=[MP], unpaired=[MP[0]])
+    assert asyncio.run(d.scan()) == []
+
+
+# ---- 以藍牙連線狀態自動挑裝置（沒明確選過時） ----
+def two_models(selected, connected):
+    s = S.Settings(selected=selected)
+    s.devices = [S.KnownDevice("AA:BB:B3:44:55:66", "AA:BB:B0:44:55:66", 2, 16, model="ES850NB"),
+                 S.KnownDevice("AA:BB:B3:11:22:33", "AA:BB:B0:11:22:33", 2, 0, model="MP330")]
+
+    async def lister():
+        return []
+
+    async def is_connected(a2dp):
+        return a2dp in connected
+
+    return DeviceDirectory("ES850NB", s, save=lambda x: None, paired_lister=lister, is_connected=is_connected)
+
+
+def test_without_an_explicit_choice_the_device_connected_over_bluetooth_is_used():
+    # 使用者的實際情況：清單第一台是沒開機的 ES850NB，MP330 已連上電腦 → 應挑 MP330，不去等 ES850NB 的 SPP
+    d = two_models("", {"AA:BB:B3:11:22:33"})
+    assert [x.model for x in asyncio.run(d.candidates())] == ["MP330"]
+    assert [x.model for x in asyncio.run(two_models("", set()).candidates())] == ["ES850NB"]   # 都沒連著：退回第一台
+
+
+def test_an_explicit_choice_is_kept_even_when_another_device_is_the_one_connected():
+    d = two_models("AA:BB:B3:11:22:33", {"AA:BB:B3:44:55:66"})
+    assert [x.model for x in asyncio.run(d.candidates())] == ["MP330"]   # 不擅自改選
+
+
+def test_add_paired_adds_new_paired_devices_without_a_scan():
+    d, saves = directory(paired_list=[MP])
+    assert asyncio.run(d.add_paired()) is True and [x.model for x in d.devices] == ["MP330"]
+    assert asyncio.run(d.add_paired()) is False   # 已在清單內：不重複、不再存檔

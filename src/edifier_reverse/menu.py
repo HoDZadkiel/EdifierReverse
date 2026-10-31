@@ -44,15 +44,21 @@ def build_menu(state: DeviceState, volume: Optional[int], muted: bool, autostart
     sep = MenuEntry(SEPARATOR)
     # 標頭用簡短的模式名稱，長名稱（例如英文）會把整個選單撐寬
     mode_name = tr(f"anc.s.{state.anc.mode}") if selectable and state.anc is not None else state.anc_label
-    detail = tr("m.header_detail", b=state.battery, mode=mode_name) if state.connected else tr("m.not_connected")
-    items: List[MenuEntry] = [MenuEntry(HEADER, state.name or fallback_name, detail=detail), sep,
-                              MenuEntry(LABEL, tr("m.anc"))]
-    for mode in MODE_IDS:
-        items.append(MenuEntry(ITEM, tr(f"anc.s.{mode}"), "",
-                               checked=selectable and state.anc is not None and state.anc.mode == mode,
-                               enabled=can_anc, id=f"anc:{mode}"))
+    if not state.connected:
+        detail = tr("m.not_connected")
+    elif state.has_anc:
+        detail = tr("m.header_detail", b=state.battery, mode=mode_name)
+    else:  # 沒有降噪的機種（例如 MP330）：只顯示電量，不放降噪項目
+        detail = tr("m.header_battery", b=state.battery)
+    items: List[MenuEntry] = [MenuEntry(HEADER, state.name or fallback_name, detail=detail), sep]
+    if state.has_anc:
+        items.append(MenuEntry(LABEL, tr("m.anc")))
+        for mode in MODE_IDS:
+            items.append(MenuEntry(ITEM, tr(f"anc.s.{mode}"), "",
+                                   checked=selectable and state.anc is not None and state.anc.mode == mode,
+                                   enabled=can_anc, id=f"anc:{mode}"))
+        items.append(sep)
     items += [
-        sep,
         MenuEntry(ITEM, tr("m.unmute") if muted else tr("m.mute"), "" if muted else "",
                   detail=f"{volume}%" if has_volume else "", enabled=has_volume, id="mute"),
         MenuEntry(ITEM, tr("m.vol_up", n=VOLUME_STEP), "", enabled=has_volume, id="vol+"),

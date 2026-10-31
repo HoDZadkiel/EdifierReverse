@@ -304,10 +304,15 @@ class Flyout:
         self.battery_lbl = tk.Label(head, text="", font=px(20, True), fg=t.text, bg=t.bg)
         self.battery_lbl.pack(side="right")
 
+        # 降噪區塊（模式磚塊與環境音強度）：沒有降噪的機種整塊隱藏，見 update
+        self.anc_box = tk.Frame(body, bg=t.bg)
+        self.anc_box.pack(fill="x")
+        self._anc_shown = True
+
         # 降噪模式：3 + 2 的磚塊
-        tk.Label(body, text=tr("p.anc"), font=self.f_small, fg=t.sub, bg=t.bg, anchor="w").pack(
+        tk.Label(self.anc_box, text=tr("p.anc"), font=self.f_small, fg=t.sub, bg=t.bg, anchor="w").pack(
             fill="x", padx=P, pady=(S(4), S(6)))
-        grid = tk.Frame(body, bg=t.bg)
+        grid = tk.Frame(self.anc_box, bg=t.bg)
         grid.pack(fill="x", padx=P)
         gap = S(8)
         tw = (inner - 2 * gap) // 3
@@ -320,18 +325,18 @@ class Flyout:
             self.tiles[mode] = tile
 
         # 環境音強度
-        row = tk.Frame(body, bg=t.bg)
+        row = tk.Frame(self.anc_box, bg=t.bg)
         row.pack(fill="x", padx=P, pady=(S(14), 0))
         self.amb_title = tk.Label(row, text=tr("p.ambient"), font=self.f_small, fg=t.sub, bg=t.bg)
         self.amb_title.pack(side="left")
         self.amb_val = tk.Label(row, text="", font=self.f_small, fg=t.text, bg=t.bg)
         self.amb_val.pack(side="right")
-        self.amb_slider = SliderBar(body, t, S, DB_RANGE[0], DB_RANGE[1], 6, self._ambient_change, inner)
+        self.amb_slider = SliderBar(self.anc_box, t, S, DB_RANGE[0], DB_RANGE[1], 6, self._ambient_change, inner)
         self.amb_slider.pack(padx=P, pady=(S(2), 0))
 
         # 音量
-        tk.Label(body, text=tr("p.volume"), font=self.f_small, fg=t.sub, bg=t.bg, anchor="w").pack(
-            fill="x", padx=P, pady=(S(10), 0))
+        self.vol_title = tk.Label(body, text=tr("p.volume"), font=self.f_small, fg=t.sub, bg=t.bg, anchor="w")
+        self.vol_title.pack(fill="x", padx=P, pady=(S(10), 0))
         vrow = tk.Frame(body, bg=t.bg)
         vrow.pack(fill="x", padx=P)
         self.mute_btn = IconButton(vrow, t, S, lambda: self.cb["mute"]())
@@ -442,6 +447,17 @@ class Flyout:
         else:
             self.status_lbl.config(text=tr("p.disconnected_err", err=state.error[:28]) if state.error else tr("p.disconnected"), fg=t.sub)
             self.battery_lbl.config(text="–", fg=t.sub)
+
+        if state.has_anc != self._anc_shown:
+            self._anc_shown = state.has_anc
+            if state.has_anc:
+                self.anc_box.pack(fill="x", before=self.vol_title)
+            else:
+                self.anc_box.pack_forget()
+            self.win.update_idletasks()
+            self.w, self.h = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
+            if self.visible:  # 高度變了：貼著工作區邊緣重新定位
+                self.show()
 
         can_set = state.connected and state.anc_supported
         cur = state.anc.mode if state.anc else None

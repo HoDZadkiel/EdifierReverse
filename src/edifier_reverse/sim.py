@@ -98,6 +98,9 @@ class SimulatedDevice(Transport):
             self._last_set = now
             self.state[C.ANC_QUERY] = payload
             return payload
+        if cmd == C.SAVING_MODE_SET:  # 省電模式：記住設定並回送新值（官方 App 兩個指令碼的回應用同一個解析）
+            self.state[C.SAVING_MODE_QUERY] = payload
+            return payload
         return self.state.get(cmd)
 
 

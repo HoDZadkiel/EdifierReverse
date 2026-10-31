@@ -16,7 +16,9 @@ public sealed record AncState(int? Group, int Mode, int? Db = null)
 
 public sealed record DeviceState(
     bool Connected = false, string Name = "", string Version = "", int? Battery = null,
-    AncState? Anc = null, string Error = "", bool Cooling = false)
+    AncState? Anc = null, string Error = "", bool Cooling = false,
+    bool HasAnc = true,
+    bool? PowerSave = null)   // 省電模式：true 開、false 關、null＝不支援或還沒查到（查詢沒有回應就是不支援，例如 ES850NB）   // 連線時 ANC 查詢沒有回應（例如 MP330）就是 false：介面隱藏降噪區塊，重新連線時重判
 {
     public bool AncSupported => Anc?.Group is int g && DeviceService.AncModes.ContainsKey(g);
 
@@ -168,7 +170,7 @@ public sealed class DeviceService
         catch (ResponseTimeoutException) { }
         var anc = await Optional(Cmd.AncQuery, AncState.Parse);
         if (battery is null && anc is null) throw new ResponseTimeoutException(Cmd.BatteryQuery);  // 兩個都沒回應才視為連線已壞
-        Update(s => s with { Battery = battery, Anc = anc });
+        Update(s => s with { Battery = battery, Anc = anc, HasAnc = s.HasAnc || anc is not null });
     }
 
     // ---- 主迴圈 ----
@@ -188,7 +190,8 @@ public sealed class DeviceService
                 client.EventReceived += OnEvent;
                 await RefreshStatic();
                 await Refresh();
-                Update(s => s with { Connected = true, Error = "" });
+                Update(s => s with { Connected = true, Error = "", HasAnc = s.Anc is not null, PowerSave = null });
+                _ = RefreshPowerSaveInBackground(_client);   // 不擋連線：不支援的機種要等逾時才知道
                 failures = 0;
                 while (true)
                 {
@@ -215,6 +218,57 @@ public sealed class DeviceService
             finally { Volatile.Write(ref _backingOff, false); }
             if (ct.IsCancellationRequested) break;
         }
+    }
+
+    // ---- 省電模式（閒置自動待機／關機）----
+    async Task RefreshPowerSaveInBackground(Client? client)
+    {
+        if (client is null) return;
+        try
+        {
+            var resp = await client.RequestAsync(Cmd.SavingModeQuery, null, TimeSpan.FromSeconds(1.5));
+            if (resp.Payload.Length > 0 && ReferenceEquals(client, _client)) Update(s => s with { PowerSave = resp.Payload[0] == 1 });
+        }
+        catch (Exception) { /* 沒有回應＝不支援，PowerSave 維持 null；連線中斷由主迴圈處理 */ }
+    }
+
+    /// <summary>重新讀取省電模式（唯讀）。裝置沒有回應就是不支援。</summary>
+    public async Task<bool> CheckPowerSaveAsync()
+    {
+        if (!State.Connected || _client is null) throw new ServiceException("e.not_connected");
+        try
+        {
+            var resp = await _client.RequestAsync(Cmd.SavingModeQuery, null, _queryTimeout);
+            var on = resp.Payload.Length > 0 && resp.Payload[0] == 1;
+            Update(s => s with { PowerSave = on });
+            return on;
+        }
+        catch (ResponseTimeoutException) { Update(s => s with { PowerSave = null }); throw new ServiceException("e.power_save_unsupported"); }
+        catch (IOException e) { Reconnect(); throw new ServiceException("e.conn_lost", new { err = e.Message }); }
+    }
+
+    /// <summary>開關省電模式：送出設定後讀回確認。關閉省電模式 ＝ 防自動關機。只有查得到狀態（PowerSave 不為 null）的機種可用。</summary>
+    public async Task<bool> SetPowerSaveAsync(bool on)
+    {
+        if (!State.Connected || _client is null) throw new ServiceException("e.not_connected");
+        if (State.PowerSave is null) throw new ServiceException("e.power_save_unsupported");
+        await _setLock.WaitAsync();
+        try
+        {
+            var client = _client ?? throw new ServiceException("e.conn_lost_plain");
+            try
+            {
+                await client.RequestAsync(Cmd.SavingModeSet, new[] { (byte)(on ? 1 : 0) }, _setTimeout);
+                var back = await client.RequestAsync(Cmd.SavingModeQuery, null, _queryTimeout);
+                var now = back.Payload.Length > 0 && back.Payload[0] == 1;
+                Update(s => s with { PowerSave = now });
+                if (now != on) throw new ServiceException("e.set_failed");   // 讀回的值與設定不同：裝置沒有採用
+                return now;
+            }
+            catch (ResponseTimeoutException) { throw new ServiceException("e.no_response"); }
+            catch (IOException e) { Reconnect(); throw new ServiceException("e.conn_lost", new { err = e.Message }); }
+        }
+        finally { _setLock.Release(); }
     }
 
     // ---- 設定 ----

@@ -15,18 +15,38 @@ public sealed class DeviceDirectory
     readonly Action<Settings> _save;
     readonly Scanner _scanner;
     readonly Func<string, Task<bool>> _isPaired;
+    readonly Func<Task<List<(string A2dp, string Name)>>> _pairedLister;
+    readonly Func<string, string, Task<ITransport>> _bleConnect;
+    readonly Func<string, Task<bool>> _isConnected;
     public Settings Settings { get; }
 
     public DeviceDirectory(Settings? settings = null, Action<Settings>? save = null, Scanner? scanner = null,
-                           Func<string, Task<bool>>? isPaired = null)
+                           Func<string, Task<bool>>? isPaired = null,
+                           Func<Task<List<(string A2dp, string Name)>>>? pairedLister = null,
+                           Func<string, string, Task<ITransport>>? bleConnect = null,
+                           Func<string, Task<bool>>? isConnected = null)
     {
         Settings = settings ?? Settings.Load();
         _save = save ?? (s => s.Save());
         _scanner = scanner ?? Discovery.ScanAllAsync;
         _isPaired = isPaired ?? Discovery.IsPairedAsync;
+        _pairedLister = pairedLister ?? Discovery.PairedEdifierDevicesAsync;
+        _isConnected = isConnected ?? Discovery.IsConnectedAsync;
+        _bleConnect = bleConnect ?? (async (addr, svc) => await BleGattTransport.ConnectAsync(addr, svc));
     }
 
     public static DeviceDirectory Load() => new();
+
+    /// <summary>沒有廣播就取不到 bleVersion／encryption，退回實機驗證過的值：ES850NB 是 (2, 16)，MP330 是 (2, 0)；其他機種沒驗證過，先用 (2, 0)。</summary>
+    public static Session FallbackSession(string model) => model == "ES850NB" ? new Session(2, 16) : new Session(2, 0);
+
+    /// <summary>從經典藍牙位址推導 BLE 位址：第三個 byte 的低 4 bit 清零（實機：ES850NB、MP330 皆為 B3 → B0）。連線時會驗證 GATT service，推導錯了就連不上。</summary>
+    public static string FallbackBleAddress(string a2dp)
+    {
+        var parts = a2dp.ToUpperInvariant().Split(':');
+        parts[2] = (Convert.ToInt32(parts[2], 16) & 0xF0).ToString("X2");
+        return string.Join(':', parts);
+    }
 
     public IReadOnlyList<KnownDevice> Devices => Settings.Devices.ToList();
     public KnownDevice? Current => Settings.CurrentDevice();
@@ -74,6 +94,35 @@ public sealed class DeviceDirectory
         if (changed) _save(Settings);
     }
 
+    /// <summary>已用經典藍牙連著電腦的裝置不再廣播，掃描看不到。改用 Windows 的已配對清單補上：機種由名稱對應目錄，BLE 位址與 Session 用推導／實機驗證的預設值。</summary>
+    async Task<List<KnownDevice>> RememberPairedWithoutAdvertAsync(HashSet<string> advertised)
+    {
+        var added = new List<KnownDevice>();
+        foreach (var (a2dp, name) in await _pairedLister())
+        {
+            if (advertised.Contains(a2dp.ToUpperInvariant()) || Settings.Device(a2dp) is not null) continue;
+            var model = name.StartsWith("EDIFIER ", StringComparison.OrdinalIgnoreCase) ? name[8..] : name;
+            if (!Catalog.ByName.ContainsKey(model)) model = Catalog.GenericModel;
+            var session = FallbackSession(model);
+            var dev = new KnownDevice
+            {
+                A2dp = a2dp.ToUpperInvariant(), Ble = FallbackBleAddress(a2dp), Version = session.Version,
+                Encryption = session.Encryption, Name = name, Model = model,
+            };
+            Settings.Remember(dev);
+            added.Add(dev);
+        }
+        return added;
+    }
+
+    /// <summary>把 Windows 已配對、但清單裡還沒有的 Edifier 裝置加進來（不靠廣播）。回傳是否有新增。啟動時與每次連線前都呼叫，新配對的裝置才找得到。</summary>
+    public async Task<bool> AddPairedAsync()
+    {
+        var added = await RememberPairedWithoutAdvertAsync(new HashSet<string>());
+        if (added.Count > 0) _save(Settings);
+        return added.Count > 0;
+    }
+
     /// <summary>掃描廣播，把找到且已配對的裝置併入已知清單並存檔；回傳這次掃到的（已配對）裝置。</summary>
     public async Task<List<KnownDevice>> ScanAsync(TimeSpan timeout, CancellationToken ct = default)
     {
@@ -86,8 +135,10 @@ public sealed class DeviceDirectory
                 Model = f.Model == "" ? Catalog.GenericModel : f.Model,
             });
         }
+        var fallback = await RememberPairedWithoutAdvertAsync(scanned.Select(f => f.A2dpAddress.ToUpperInvariant()).ToHashSet());
         await PruneUnpairedAsync();
-        var seen = scanned.Select(f => Settings.Device(f.A2dpAddress)).OfType<KnownDevice>().ToList();
+        var seen = scanned.Select(f => Settings.Device(f.A2dpAddress)).OfType<KnownDevice>()
+                          .Concat(fallback.Where(Settings.Devices.Contains)).ToList();
         if (seen.Count > 0) _save(Settings);
         return seen;
     }
@@ -98,15 +149,43 @@ public sealed class DeviceDirectory
         var scan = scanTimeout ?? TimeSpan.FromSeconds(8);
         return async ct =>
         {
-            var dev = Current;
-            if (dev is null)
+            await AddPairedAsync();
+            if (Current is null) await ScanAsync(scan, ct);
+            var candidates = await CandidatesAsync();
+            if (candidates.Count == 0) throw new IOException(Strings.T("e.not_found", new { model = "Edifier" }));
+            Exception? last = null;
+            foreach (var dev in candidates)
             {
-                await ScanAsync(scan, ct);
-                dev = Current ?? throw new IOException(Strings.T("e.not_found", new { model = "Edifier" }));
+                try { return await ConnectOne(dev); }
+                catch (Exception e) when (e is IOException or TimeoutException) { last = e; }
             }
-            if (!Catalog.UsesSpp(dev.Model)) throw new IOException(Strings.T("e.ble_only"));  // C# 版尚未實作 BLE GATT
-            var t = await RfcommTransport.ConnectAsync(dev.A2dp);
-            return ((ITransport)t, new Session(dev.Version, dev.Encryption));
+            throw last!;
         };
+    }
+
+    /// <summary>要嘗試連線的裝置。使用者明確選過就只連那一台；沒選過時，以藍牙連線狀態偵測：
+    /// 有已連著電腦的裝置就只連它們（例如 MP330 連上後自動切過去），都沒連著才連第一台。</summary>
+    async Task<List<KnownDevice>> CandidatesAsync()
+    {
+        if (Settings.Selected != "" && Settings.Device(Settings.Selected) is { } chosen) return new() { chosen };
+        var connected = new List<KnownDevice>();
+        foreach (var d in Settings.Devices)
+            if (await _isConnected(d.A2dp)) connected.Add(d);
+        if (connected.Count > 0) return connected;
+        return Current is { } first ? new() { first } : new();
+    }
+
+    async Task<(ITransport Transport, Session Session)> ConnectOne(KnownDevice dev)
+    {
+        {
+            var session = new Session(dev.Version, dev.Encryption);
+            if (!Catalog.UsesSpp(dev.Model))
+            {
+                if (dev.Ble == "") throw new IOException(Strings.T("e.not_found", new { model = dev.Model }));
+                return (await _bleConnect(dev.Ble, Catalog.ByName[dev.Model].Service), session);
+            }
+            var t = await RfcommTransport.ConnectAsync(dev.A2dp);
+            return ((ITransport)t, session);
+        }
     }
 }

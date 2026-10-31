@@ -146,3 +146,13 @@ def test_menu_toggle_ignores_the_click_right_after_a_focus_loss_hide(tk_root):
     assert not menu.visible
     menu.toggle_at(1200, 1000)          # 緊接著的點擊視為「點圖示造成的收起」，不重開
     assert not menu.visible
+
+
+def test_device_without_anc_hides_the_anc_items_and_shows_only_the_battery():
+    # MP330 沒有降噪：連上時 ANC 查詢沒有回應 → has_anc=False，選單不放降噪項目，標頭也不顯示「未知」模式
+    s = DeviceState(True, "EDIFIER MP330", "1.0.1", 100, None, has_anc=False)
+    m = build_menu(s, 50, False, False)
+    assert not any(e.id.startswith("anc:") for e in m)
+    assert m[0].detail == "電量 100%"
+    assert [e.id for e in m if e.id][:3] == ["mute", "vol+", "vol-"]
+    assert not any(e.kind == SEPARATOR and n.kind == SEPARATOR for e, n in zip(m, m[1:]))  # 隱藏後不留下連續分隔線

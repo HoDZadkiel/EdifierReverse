@@ -17,6 +17,7 @@ sealed class FakeDevice : ITransport
     public int IgnoredSets;
     public readonly List<byte[]> Written = new();
     public bool Connected = true;
+    public byte? PowerSave;   // null＝不支援省電模式：不回應（像 ES850NB）；0 關、1 開
     public readonly HashSet<byte> Silent = new();   // 模擬「這個機種不支援該查詢」：不回應
 
     public event Action<byte[]>? DataReceived;
@@ -40,6 +41,8 @@ sealed class FakeDevice : ITransport
             Cmd.NameQuery => "SIM-DEVICE"u8.ToArray(),
             Cmd.AncQuery => Anc,
             Cmd.AncSet => HandleSet(req.Payload),
+            Cmd.SavingModeQuery => PowerSave is byte ps ? new[] { ps } : null,
+            Cmd.SavingModeSet => PowerSave is null ? null : (PowerSave = req.Payload[0]) is byte v ? new[] { v } : null,
             _ => null,
         };
         if (reply is null) return Task.CompletedTask;
@@ -369,5 +372,132 @@ public class VolumeTests
         var v = new VolumeControl("X", _ => ep);
         v.SetMute(true); Assert.True(v.Muted());
         v.SetMute(false); Assert.False(v.Muted());
+    }
+}
+
+public class KeepAwakeTests
+{
+    sealed class Probe : IDisposable
+    {
+        public bool Disposed;
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact] public void Streams_follow_the_wanted_devices_and_stop_when_they_are_no_longer_wanted()
+    {
+        var made = new Dictionary<string, Probe>();
+        using var ka = new KeepAwake(n => made[n] = new Probe());
+        ka.Reconcile(new[] { "MP330", "ES850NB" });
+        Assert.Equal(new[] { "ES850NB", "MP330" }, ka.Running.OrderBy(x => x));
+        ka.Reconcile(new[] { "MP330" });   // 取消勾選 ES850NB：它的串流要停掉，MP330 的不能重開
+        Assert.True(made["ES850NB"].Disposed);
+        Assert.False(made["MP330"].Disposed);
+        Assert.Equal(new[] { "MP330" }, ka.Running);
+    }
+
+    [Fact] public void A_missing_endpoint_is_retried_on_the_next_reconcile_and_failures_do_not_throw()
+    {
+        int tries = 0;
+        using var ka = new KeepAwake(n => ++tries switch { 1 => null, 2 => throw new IOException("busy"), _ => new Probe() });
+        ka.Reconcile(new[] { "MP330" }); Assert.Empty(ka.Running);   // 裝置還沒連上：沒有端點
+        ka.Reconcile(new[] { "MP330" }); Assert.Empty(ka.Running);   // 端點被占用：吞掉例外
+        ka.Reconcile(new[] { "MP330" }); Assert.Equal(new[] { "MP330" }, ka.Running);
+    }
+
+    [Fact] public void Endpoint_name_part_drops_the_brand_prefix_and_falls_back_to_the_model()
+    {
+        Assert.Equal("MP330", KeepAwake.NamePart(new KnownDevice { Name = "EDIFIER MP330", Model = "MP330" }));
+        Assert.Equal("ES850NB", KeepAwake.NamePart(new KnownDevice { Model = "ES850NB" }));
+        Assert.Equal("", KeepAwake.NamePart(new KnownDevice()));   // 沒名稱也不知機種：不猜
+    }
+
+    [Fact] public void Tone_level_stays_far_below_audibility()
+    {
+        Assert.InRange(20 * Math.Log10(KeepAwake.Amplitude), -60, -40);   // dBFS
+        Assert.True(KeepAwake.Frequency < 40);
+    }
+}
+
+public class PowerSaveTests
+{
+    static readonly Session S = new(2, 0);   // MP330：版本 2、不加密
+
+    static (List<FakeDevice> devices, DeviceService svc) Start(byte? powerSave)
+    {
+        var devices = new List<FakeDevice>();
+        Connector c = _ =>
+        {
+            var d = new FakeDevice(S) { PowerSave = powerSave };
+            devices.Add(d);
+            return Task.FromResult(((ITransport)d, S));
+        };
+        var svc = new DeviceService(c, backoff: new[] { TimeSpan.FromMilliseconds(10) });
+        svc.Start();
+        return (devices, svc);
+    }
+
+    static async Task<bool?> WaitPowerSave(DeviceService svc, bool? expected)
+    {
+        for (int i = 0; i < 100 && svc.State.PowerSave != expected; i++) await Task.Delay(30);
+        return svc.State.PowerSave;
+    }
+
+    [Fact] public async Task A_device_that_answers_reports_whether_power_saving_is_on_without_blocking_the_connection()
+    {
+        var (_, svc) = Start(1);
+        try
+        {
+            await svc.WaitConnectedAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal(true, await WaitPowerSave(svc, true));   // 連上後在背景查到：目前是省電模式
+        }
+        finally { await svc.StopAsync(); }
+    }
+
+    [Fact] public async Task A_device_that_does_not_answer_has_no_power_saving_setting_and_stays_connected()
+    {
+        var (_, svc) = Start(null);   // 像 ES850NB
+        try
+        {
+            await svc.WaitConnectedAsync(TimeSpan.FromSeconds(3));
+            await Task.Delay(1900);   // 超過背景查詢的 1.5 秒逾時
+            Assert.Null(svc.State.PowerSave);
+            Assert.True(svc.State.Connected);
+            await Assert.ThrowsAsync<ServiceException>(() => svc.SetPowerSaveAsync(false));   // 不支援就不送設定
+        }
+        finally { await svc.StopAsync(); }
+    }
+
+    [Fact] public async Task Check_rereads_the_device_and_picks_up_a_change_made_elsewhere()
+    {
+        var (devices, svc) = Start(1);
+        try
+        {
+            await svc.WaitConnectedAsync(TimeSpan.FromSeconds(3));
+            await WaitPowerSave(svc, true);
+            devices[0].PowerSave = 0;   // 例如在手機 App 或喇叭上改了
+            Assert.False(await svc.CheckPowerSaveAsync());
+            Assert.Equal(false, svc.State.PowerSave);
+            Assert.DoesNotContain(devices[0].Written, w => w[2] == Cmd.SavingModeSet);   // 檢查是唯讀：沒有送出任何設定
+        }
+        finally { await svc.StopAsync(); }
+    }
+
+    [Fact] public async Task Turning_power_saving_off_sends_the_set_command_and_confirms_by_reading_back()
+    {
+        var (devices, svc) = Start(1);
+        try
+        {
+            await svc.WaitConnectedAsync(TimeSpan.FromSeconds(3));
+            await WaitPowerSave(svc, true);
+            Assert.False(await svc.SetPowerSaveAsync(false));
+            Assert.Equal((byte)0, devices[0].PowerSave);
+            var sets = devices[0].Written.Where(w => w[2] == Cmd.SavingModeSet).ToList();
+            Assert.Single(sets);
+            Assert.Equal(new byte[] { 0 }, PacketCodec.Parse(S, sets[0], new byte[] { 0xAA }).Payload);
+            Assert.Equal(false, svc.State.PowerSave);
+            Assert.True(await svc.SetPowerSaveAsync(true));   // 還原
+            Assert.Equal((byte)1, devices[0].PowerSave);
+        }
+        finally { await svc.StopAsync(); }
     }
 }

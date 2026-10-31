@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -20,7 +21,9 @@ public partial class TrayMenuWindow : Window
     public TrayMenuWindow()
     {
         InitializeComponent();
-        Deactivated += (_, _) => { if ((DateTime.UtcNow - _shownAt).TotalMilliseconds > 300) HideMenu(); };
+        InitSubmenuTimers();
+        Closed += (_, _) => CloseSub();
+        Deactivated += (_, _) => { if ((DateTime.UtcNow - _shownAt).TotalMilliseconds > 300 && _sub?.IsMouseOver != true) HideMenu(); };
         KeyDown += (_, e) => { if (e.Key == Key.Escape) HideMenu(); };
     }
 
@@ -37,26 +40,152 @@ public partial class TrayMenuWindow : Window
     public void Populate(IReadOnlyList<MenuEntry> entries, ImageSource? logo)
     {
         _entries = entries;
+        CloseSub();
         ItemsHost.Children.Clear();
         foreach (var e in entries)
         {
-            switch (e.Kind)
-            {
-                case EntryKind.Header: ItemsHost.Children.Add(BuildHeader(e, logo)); break;
-                case EntryKind.Label:
-                    var label = new TextBlock { Text = e.Text, FontSize = 12, Margin = new Thickness(12, 6, 0, 2) };
-                    label.SetResourceReference(TextBlock.ForegroundProperty, "SubBrush");
-                    ItemsHost.Children.Add(label);
-                    break;
-                case EntryKind.Segmented: ItemsHost.Children.Add(BuildSegmented(e)); break;
-                case EntryKind.Separator:
-                    var sep = new Border { Height = 1, Margin = new Thickness(8, 4, 8, 4) };
-                    sep.SetResourceReference(Border.BackgroundProperty, "BorderBrush2");
-                    ItemsHost.Children.Add(sep);
-                    break;
-                default: ItemsHost.Children.Add(BuildItem(e)); break;
-            }
+            var el = BuildEntry(e, logo);
+            if (e.Kind != EntryKind.Section) el.MouseEnter += (_, _) => ScheduleClose();   // 移到別的列：子選單收起
+            ItemsHost.Children.Add(el);
         }
+    }
+
+    /// <summary>一個項目對應的畫面元素（主選單與子選單共用）。</summary>
+    UIElement BuildEntry(MenuEntry e, ImageSource? logo = null)
+    {
+        switch (e.Kind)
+        {
+            case EntryKind.Header: return BuildHeader(e, logo);
+            case EntryKind.Label:
+                var label = new TextBlock { Text = e.Text, FontSize = 12, Margin = new Thickness(12, 6, 0, 2) };
+                label.SetResourceReference(TextBlock.ForegroundProperty, "SubBrush");
+                return label;
+            case EntryKind.Segmented: return BuildSegmented(e);
+            case EntryKind.Section: return BuildSection(e);
+            case EntryKind.Separator:
+                var sep = new Border { Height = 1, Margin = new Thickness(8, 4, 8, 4) };
+                sep.SetResourceReference(Border.BackgroundProperty, "BorderBrush2");
+                return sep;
+            default: return BuildItem(e);
+        }
+    }
+
+    // ---- 子選單：滑鼠移到大項上，選項從右側彈出（右邊放不下會自動翻到左邊） ----
+    Window? _sub;   // 子選單用獨立的無邊框視窗（Close 是同步的；Popup 的視窗銷毀是非同步，收尾時會出問題）
+    string _subKey = "";
+
+    /// <summary>子選單視窗的位置與大小（DIP）；沒有子選單時為 null。</summary>
+    public Rect? SubmenuBounds => _sub is { IsVisible: true } ? new Rect(_sub.Left, _sub.Top, _sub.ActualWidth, _sub.ActualHeight) : null;
+
+    /// <summary>目前彈出的子選單所屬大項的代號（sec:...）；沒有子選單時為空字串。</summary>
+    public string OpenSubmenu => _sub is { IsVisible: true } ? _subKey : "";
+    readonly DispatcherTimer _openTimer = new() { Interval = TimeSpan.FromMilliseconds(120) };
+    readonly DispatcherTimer _closeTimer = new() { Interval = TimeSpan.FromMilliseconds(280) };
+    (MenuEntry Entry, FrameworkElement Row)? _pendingOpen;
+
+    void InitSubmenuTimers()
+    {
+        _openTimer.Tick += (_, _) => { _openTimer.Stop(); if (_pendingOpen is var (en, row)) OpenSub(en, row); };
+        _closeTimer.Tick += (_, _) => { _closeTimer.Stop(); CloseSub(); };
+    }
+
+    /// <summary>游標移進大項標題列：稍微延遲後彈出它的子選單（游標斜著掃過別的大項時才不會一直閃）。</summary>
+    void EnterSection(MenuEntry e, FrameworkElement row)
+    {
+        _closeTimer.Stop();
+        if (_subKey == e.Id) return;
+        _pendingOpen = (e, row);
+        _openTimer.Stop(); _openTimer.Start();
+    }
+
+    /// <summary>測試與自動化用：等同游標移進指定大項／移進一般列。</summary>
+    public void HoverSection(string id) =>
+        EnterSection(_entries.Single(x => x.Id == id), (FrameworkElement)ItemsHost.Children.OfType<Button>().Single(b => (string)b.Tag == id));
+    /// <summary>測試用：讓還在倒數的開啟／收起計時器立刻到期（不必跑訊息迴圈，那會讓視窗失焦而收起）。</summary>
+    public void FlushHoverTimers()
+    {
+        if (_openTimer.IsEnabled) { _openTimer.Stop(); if (_pendingOpen is var (en, row)) OpenSub(en, row); }
+        if (_closeTimer.IsEnabled) { _closeTimer.Stop(); CloseSub(); }
+    }
+    public void HoverOtherRow() => ScheduleClose();
+
+    void ScheduleClose() { _openTimer.Stop(); _pendingOpen = null; _closeTimer.Stop(); _closeTimer.Start(); }
+
+    void CloseSub()
+    {
+        _openTimer.Stop(); _closeTimer.Stop(); _pendingOpen = null;
+        if (_sub is not null) { var w = _sub; _sub = null; w.Close(); }
+        _subKey = "";
+    }
+
+    void OpenSub(MenuEntry e, FrameworkElement row)
+    {
+        _closeTimer.Stop();
+        if (_sub is not null && _subKey == e.Id) return;   // 已經開著
+        CloseSub();
+        var content = BuildSubmenuContent(e);
+        content.MouseEnter += (_, _) => _closeTimer.Stop();   // 游標移進子選單：不收
+        content.MouseLeave += (_, _) => ScheduleClose();
+        content.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var size = content.DesiredSize;
+        var scale = WindowEffects.DpiScale(this);
+        var rowTop = row.PointToScreen(new Point(0, 0)).Y / scale;   // PointToScreen 是裝置像素
+        var wa = SystemParameters.WorkArea;
+        const double shadow = 12;   // 內容右、下留給陰影的邊
+        double left = Left + ActualWidth - 2;                         // 預設貼在主選單右側
+        if (left + size.Width > wa.Right) left = Left - size.Width + shadow + 2;   // 右邊放不下：翻到左側
+        double top = Math.Min(Math.Max(rowTop - 5, wa.Top), wa.Bottom - size.Height);
+        _sub = new Window
+        {
+            WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent, ShowInTaskbar = false,
+            ShowActivated = false, Topmost = true, ResizeMode = ResizeMode.NoResize, SizeToContent = SizeToContent.WidthAndHeight,
+            Left = left, Top = top, Content = content, UseLayoutRounding = true, SnapsToDevicePixels = true,
+            FontFamily = FontFamily,
+        };
+        _sub.Show();
+        _subKey = e.Id;
+    }
+
+    /// <summary>子選單的內容（圓角面板，樣式跟主選單一致）。</summary>
+    public FrameworkElement BuildSubmenuContent(MenuEntry section)
+    {
+        var host = new StackPanel();
+        foreach (var child in section.Children ?? Array.Empty<MenuEntry>()) host.Children.Add(BuildEntry(child));
+        var box = new Border
+        {
+            Child = host, Padding = new Thickness(4), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8),
+            MinWidth = 220, MaxWidth = 320, Margin = new Thickness(0, 0, 12, 12),   // 留邊給陰影
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 12, ShadowDepth = 2, Opacity = 0.35 },
+        };
+        box.SetResourceReference(Border.BackgroundProperty, "BgBrush");
+        box.SetResourceReference(Border.BorderBrushProperty, "BorderBrush2");
+        return box;
+    }
+
+    /// <summary>大項標題列：左邊名稱、右邊目前狀態摘要與向右的箭頭。滑過或點一下就彈出子選單，點選時主選單不關。</summary>
+    UIElement BuildSection(MenuEntry e)
+    {
+        var grid = new Grid { Height = 34 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
+        grid.Children.Add(new TextBlock { Text = e.Text, FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 8, 0) });
+        if (e.Detail != "")
+        {
+            var summary = new TextBlock { Text = e.Detail, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.7, MaxWidth = 130, TextTrimming = TextTrimming.CharacterEllipsis };
+            Grid.SetColumn(summary, 1);
+            grid.Children.Add(summary);
+        }
+        var chevron = new TextBlock { Text = "", FontFamily = (FontFamily)Application.Current.Resources["IconFont"], FontSize = 11,
+                                      HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        chevron.SetResourceReference(TextBlock.ForegroundProperty, "SubBrush");
+        Grid.SetColumn(chevron, 2);
+        grid.Children.Add(chevron);
+        var button = new Button { Content = grid, Style = (Style)Application.Current.Resources["MenuRow"], Tag = e.Id };
+        button.MouseEnter += (_, _) => EnterSection(e, button);
+        button.MouseLeave += (_, _) => { _openTimer.Stop(); _pendingOpen = null; ScheduleClose(); };
+        button.Click += (_, _) => OpenSub(e, button);
+        return button;
     }
 
     static UIElement BuildHeader(MenuEntry e, ImageSource? logo)
@@ -152,9 +281,12 @@ public partial class TrayMenuWindow : Window
     }
 
     // ---- 顯示 ----
+    int _anchorX, _anchorY;
+
     /// <summary>在游標位置（裝置像素）顯示。</summary>
     public void ShowAt(int cursorX, int cursorY)
     {
+        _anchorX = cursorX; _anchorY = cursorY;
         new WindowInteropHelper(this).EnsureHandle();  // 視窗從未顯示過就 Measure 會讓 WPF FailFast
         Measure(new Size(Width, double.PositiveInfinity));
         var wa = SystemParameters.WorkArea;
@@ -172,6 +304,7 @@ public partial class TrayMenuWindow : Window
 
     public void HideMenu()
     {
+        CloseSub();
         _hiddenAt = DateTime.UtcNow;
         BeginAnimation(OpacityProperty, null);
         Opacity = 0;

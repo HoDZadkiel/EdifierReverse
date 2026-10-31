@@ -19,6 +19,20 @@ def parse_battery(payload: bytes) -> int:
     return _signed(payload[0])
 
 
+def parse_power_save(payload: bytes) -> bool:
+    """0xB1／0xB2：第 0 個位元組為 1 表示省電模式開啟（官方 App 的 parsePowerSaveMode，兩個指令碼共用）。"""
+    if not payload:
+        raise PacketError("省電模式回應為空")
+    return payload[0] == 1
+
+
+def parse_auto_shutdown_no_input(payload: bytes) -> bool:
+    """0xD7／0xD6：第 0 個位元組為 1 表示無音訊自動關機開啟。"""
+    if not payload:
+        raise PacketError("無音訊自動關機回應為空")
+    return payload[0] == 1
+
+
 def parse_version(payload: bytes) -> str:
     """0xC6：每個位元組轉十進位，以 "." 連接。"""
     return ".".join(str(_signed(b)) for b in payload)

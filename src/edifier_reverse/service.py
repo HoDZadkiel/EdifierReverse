@@ -46,6 +46,7 @@ class DeviceState:
     anc: Optional[AncState] = None
     error: str = ""
     cooling: bool = False  # ANC 設定送出後的冷卻期：介面應暫停切換（裝置在間隔內會靜默忽略設定）
+    has_anc: bool = True   # 連線時 ANC 查詢沒有回應（例如 MP330）就是 False：介面隱藏降噪區塊。重新連線時重判
 
     @property
     def anc_supported(self) -> bool:
@@ -160,7 +161,7 @@ class DeviceService:
         anc = await self._optional(C.ANC_QUERY, parse_anc)
         if battery is None and anc is None:
             raise ResponseTimeout("裝置沒有回應電量與 ANC 查詢")  # 兩個都沒回應才視為連線已壞
-        self._update(battery=battery, anc=anc)
+        self._update(battery=battery, anc=anc, **({"has_anc": True} if anc is not None else {}))
 
     # ---- 主迴圈 ----
     async def _run(self) -> None:
@@ -174,7 +175,7 @@ class DeviceService:
                 self._client = Client(transport, session, on_event=self._on_event)
                 await self._refresh_static()
                 await self._refresh()
-                self._update(connected=True, error="")
+                self._update(connected=True, error="", has_anc=self.state.anc is not None)
                 failures = 0
                 while True:
                     try:

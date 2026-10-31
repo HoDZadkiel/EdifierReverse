@@ -18,6 +18,8 @@ public sealed class TrayHost : IDisposable
     public DeviceDirectory? Directory { get; }
     readonly NotifyIcon? _icon;
     readonly ConnectionWatcher _watcher = new();
+    readonly KeepAwake _keepAwake = new();
+    System.Threading.Timer? _keepAwakeTimer;
     readonly OsdTracker _tracker = new();
     HotkeyListener? _hotkeys;
     int? _volume;
@@ -35,6 +37,8 @@ public sealed class TrayHost : IDisposable
         Service = new DeviceService(connector);
         Flyout = new FlyoutWindow();
         Flyout.AncRequested += async m => await RunAnc(m, null);
+        Flyout.PowerCheckRequested += () => _ = RunPowerCheck();
+        Flyout.PowerSaveToggled += () => _ = RunPowerSave();
         Flyout.AmbientRequested += async db => await RunAnc(DeviceService.AmbientMode[16], db);
         Flyout.VolumeChanged += OnVolume;
         Flyout.MuteToggled += ToggleMute;
@@ -68,18 +72,20 @@ public sealed class TrayHost : IDisposable
         {
             _watcher.Connected += Service.NotifyDeviceAvailable;
             _ = PruneAndWatchAsync();
+            _keepAwakeTimer = new System.Threading.Timer(_ => ReconcileKeepAwake(), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(20));   // 裝置連上／斷線時端點會出現／消失，定期對齊
         }
     }
 
     /// <summary>啟動時清掉已不再配對的裝置，再開始監看；失敗不影響其他功能。</summary>
     async Task PruneAndWatchAsync()
     {
-        try { await Directory!.PruneUnpairedAsync(); }
+        try { await Directory!.PruneUnpairedAsync(); await Directory.AddPairedAsync(); }
         catch (Exception) { }
-        WatchCurrentDevice();
+        WatchDevices();
     }
 
-    void WatchCurrentDevice() => _ = _watcher.WatchAsync(Directory?.Current?.A2dp ?? "");
+    /// <summary>監看所有已知裝置的藍牙連線事件：沒明確選過裝置時，哪一台連上電腦就連哪一台。</summary>
+    void WatchDevices() => _ = _watcher.WatchAsync(Directory?.Devices.Select(d => d.A2dp) ?? Enumerable.Empty<string>());
 
     void StartHotkeys()
     {
@@ -170,7 +176,7 @@ public sealed class TrayHost : IDisposable
     public void SelectDevice(string a2dp)
     {
         if (Directory is null || !Directory.Select(a2dp)) return;
-        WatchCurrentDevice();
+        WatchDevices();
         Service.Reconnect();
     }
 
@@ -182,7 +188,7 @@ public sealed class TrayHost : IDisposable
         {
             var found = await Directory.ScanAsync(TimeSpan.FromSeconds(6));
             Flyout.ShowMessage(Strings.T("m.found_n", new { n = found.Count }));
-            WatchCurrentDevice();  // 第一次掃到裝置時才有選用裝置可監看
+            WatchDevices();  // 第一次掃到裝置時才有選用裝置可監看
         }
         catch (Exception e) { Flyout.ShowMessage(Strings.T("e.scan_failed", new { err = e.Message })); }
         finally { _scanning = false; }
@@ -196,11 +202,70 @@ public sealed class TrayHost : IDisposable
         return Directory.Devices.Select(d => (d.A2dp, DeviceDirectory.Label(d), string.Equals(d.A2dp, cur, StringComparison.OrdinalIgnoreCase))).ToList();
     }
 
+    /// <summary>讓執行中的保活串流與「想保持開機的裝置」一致。</summary>
+    void ReconcileKeepAwake()
+    {
+        try { _keepAwake.Reconcile(Directory!.Devices.Where(d => d.KeepAwake).Select(KeepAwake.NamePart)); }
+        catch (Exception) { }
+    }
+
+    /// <summary>重新讀取省電模式（唯讀），結果顯示在 OSD。</summary>
+    async Task RunPowerCheck()
+    {
+        try
+        {
+            var on = await Service.CheckPowerSaveAsync();
+            Osd.ShowOsd(Strings.T("m.power_state", new { state = on ? Strings.T("m.on") : Strings.T("m.off") }));
+        }
+        catch (ServiceException e) { Flyout.ShowMessage(e.Message); }
+    }
+
+    /// <summary>切換防自動關機：關閉省電模式＝防自動關機；送出後讀回確認，結果顯示在 OSD。</summary>
+    async Task RunPowerSave()
+    {
+        if (Service.State.PowerSave is not bool current) return;
+        try
+        {
+            var now = await Service.SetPowerSaveAsync(!current);
+            Osd.ShowOsd(Strings.T(now ? "o.auto_off_off" : "o.auto_off_on", new { name = Service.State.Name == "" ? FallbackName : Service.State.Name }));
+        }
+        catch (ServiceException e) { Flyout.ShowMessage(e.Message); }
+    }
+
+    void ToggleKeepAwake()
+    {
+        if (Directory?.Current is not { } dev) return;
+        dev.KeepAwake = !dev.KeepAwake;
+        Settings.Save();
+        ReconcileKeepAwake();
+        Osd.ShowOsd(Strings.T(dev.KeepAwake ? "o.keep_awake_on" : "o.keep_awake_off", new { name = DeviceDirectory.FallbackName(dev) }));
+    }
+
+    static IReadOnlyList<AudioOutput> OutputRows()
+    {
+        try { return AudioOutputs.List(); }
+        catch (Exception) { return Array.Empty<AudioOutput>(); }   // 列不出來就不顯示這一區，不影響其他功能
+    }
+
+    /// <summary>把指定的播放端點設為系統預設輸出。音量按鈕的端點會重新挑，結果顯示在 OSD。</summary>
+    void SwitchOutput(string deviceId)
+    {
+        try
+        {
+            var name = AudioOutputs.List().FirstOrDefault(o => o.Id == deviceId)?.Name ?? "";
+            AudioOutputs.SetDefault(deviceId);
+            Volume.Reset();
+            RefreshVolume();
+            Osd.ShowOsd(Strings.T("o.output_switched", new { name = AudioOutputs.Shorten(name) }));
+        }
+        catch (Exception e) { Flyout.ShowMessage(Strings.T("e.output_failed", new { err = e.Message })); }
+    }
+
     /// <summary>依目前狀態重建選單並在指定位置（裝置像素）切換顯示。</summary>
     public void ShowMenuAt(int x, int y)
     {
         Menu.Populate(TrayMenuModel.Build(Service.State, _volume, _muted, Autostart.IsEnabled(), DeviceRows(),
-                                          Settings.Theme, Strings.Language, _scanning, FallbackName), MenuLogo());
+                                          Settings.Theme, Strings.Language, _scanning, FallbackName, OutputRows(), Directory?.Current?.KeepAwake), MenuLogo());
         Menu.ToggleAt(x, y);
     }
 
@@ -220,6 +285,7 @@ public sealed class TrayHost : IDisposable
         {
             case "anc": _ = RunAnc(int.Parse(arg), null); return;
             case "dev": SelectDevice(arg); return;
+            case "out": SwitchOutput(arg); return;
             case "theme": SetTheme(arg); return;
             case "lang": SetLanguage(arg); return;
         }
@@ -229,6 +295,9 @@ public sealed class TrayHost : IDisposable
             case "vol+": StepVolume(+TrayMenuModel.VolumeStep); break;
             case "vol-": StepVolume(-TrayMenuModel.VolumeStep); break;
             case "rescan": _ = RescanAsync(); break;
+            case "keepawake": ToggleKeepAwake(); break;
+            case "powercheck": _ = RunPowerCheck(); break;
+            case "powersave": _ = RunPowerSave(); break;
             case "open": Flyout.ShowFlyout(); break;
             case "reconnect": Service.Reconnect(); break;
             case "autostart": ToggleAutostart(); break;
@@ -290,6 +359,8 @@ public sealed class TrayHost : IDisposable
     public void Dispose()
     {
         _watcher.Dispose();
+        _keepAwakeTimer?.Dispose();
+        _keepAwake.Dispose();
         _hotkeys?.Dispose();
         if (_icon is not null) { _icon.Visible = false; _icon.Dispose(); }
         Menu.Close();

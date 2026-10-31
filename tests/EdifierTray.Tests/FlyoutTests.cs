@@ -39,6 +39,14 @@ public class FlyoutTests
 
             var f = new FlyoutWindow();
             f.ApplyState(new DeviceState(true, "EDIFIER ES850NB", "1.0.1", 16, new AncState(16, 4, 8)), 50, false);
+            // 沒有降噪的機種（MP330）：整個降噪區塊收起，有降噪的再顯示
+            var anc = (System.Windows.FrameworkElement)f.FindName("AncBox");
+            Assert.Equal(System.Windows.Visibility.Visible, anc.Visibility);
+            f.ApplyState(new DeviceState(true, "EDIFIER MP330", "1.0.1", 100, null, HasAnc: false), 50, false);
+            Assert.Equal(System.Windows.Visibility.Collapsed, anc.Visibility);
+            f.ApplyState(new DeviceState(true, "EDIFIER ES850NB", "1.0.1", 16, new AncState(16, 4, 8)), 50, false);
+            Assert.Equal(System.Windows.Visibility.Visible, anc.Visibility);
+
             // 左下角顯示版本號，與 pyproject.toml 的 version 同一份
             Assert.Matches(@"^v\d+\.\d+\.\d+$", f.VersionLabel);
             Assert.Equal("v" + FlyoutWindow.AppVersion, f.VersionLabel);
@@ -88,13 +96,36 @@ public class FlyoutTests
             Thread.Sleep(300);                         // 越過「剛收起不重開」的保護時間
             menu.ShowAt(1200, 1380);
             var rows = FindButtons(menu.Content).ToDictionary(b => (string)b.Tag);
-            Assert.True(rows["anc:3"].IsEnabled);
+            // 降噪模式在「降噪模式」大項的子選單裡（滑鼠移上去才彈出），主選單本身只有大項標題與音量等常用項目
+            Assert.DoesNotContain("anc:3", rows.Keys);
+            var ancRows = FindButtons(menu.BuildSubmenuContent(menu.Entries.Single(e => e.Id == "sec:anc"))).ToDictionary(b => (string)b.Tag);
+            Assert.True(ancRows["anc:3"].IsEnabled);
             rows["mute"].RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
             Assert.Equal(new[] { "mute" }, invoked);
             Assert.False(menu.IsVisible);              // 點選後自動收起
 
+            // 子選單：滑鼠移到大項上彈出、移到別列收起、關選單一起關（計時器用 FlushHoverTimers 立即到期）
+            menu.Populate(TrayMenuModel.Build(state, 50, false, false), null);
+            menu.ShowAt(1200, 1380);
+            Assert.Equal("", menu.OpenSubmenu);
+            menu.HoverSection("sec:anc");
+            Assert.Equal("", menu.OpenSubmenu);               // 稍微延遲才彈出（斜著掃過不閃）
+            menu.FlushHoverTimers();
+            Assert.Equal("sec:anc", menu.OpenSubmenu);        // 移上去：子選單彈出
+            menu.HoverSection("sec:devices");
+            menu.FlushHoverTimers();
+            Assert.Equal("sec:devices", menu.OpenSubmenu);    // 移到另一個大項：換成它的子選單
+            menu.HoverOtherRow();
+            menu.FlushHoverTimers();
+            Assert.Equal("", menu.OpenSubmenu);               // 移到別的列：收起
+            menu.HoverSection("sec:anc");
+            menu.FlushHoverTimers();
+            Assert.Equal("sec:anc", menu.OpenSubmenu);
+            menu.HideMenu();
+            Assert.Equal("", menu.OpenSubmenu);               // 主選單收起時子選單一起關
+
             menu.Populate(TrayMenuModel.Build(new DeviceState(), null, false, false), null);
-            Assert.False(FindButtons(menu.Content).First(b => (string)b.Tag == "anc:2").IsEnabled);  // 未連線：停用
+            Assert.False(FindButtons(menu.BuildSubmenuContent(menu.Entries.Single(e => e.Id == "sec:anc"))).First(b => (string)b.Tag == "anc:2").IsEnabled);  // 未連線：停用
             menu.Close();
 
             // ---- OSD（同一個 Application 內接著測） ----

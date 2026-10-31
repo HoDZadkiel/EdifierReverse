@@ -16,7 +16,7 @@ public partial class FlyoutWindow : Window
     public event Action<int>? AncRequested;
     public event Action<int>? AmbientRequested;
     public event Action<int>? VolumeChanged;
-    public event Action? MuteToggled, ReconnectRequested, QuitRequested;
+    public event Action? MuteToggled, ReconnectRequested, QuitRequested, PowerCheckRequested, PowerSaveToggled;
 
     readonly RadioButton[] _tiles;
     readonly DispatcherTimer _ambientDebounce = new() { Interval = TimeSpan.FromMilliseconds(350) };
@@ -66,6 +66,8 @@ public partial class FlyoutWindow : Window
             if (!_updating) VolumeChanged?.Invoke((int)VolumeSlider.Value);
         };
         MuteButton.Click += (_, _) => MuteToggled?.Invoke();
+        PowerCheckRow.Click += (_, _) => PowerCheckRequested?.Invoke();
+        PowerSaveRow.Click += (_, _) => PowerSaveToggled?.Invoke();
         ReconnectLink.MouseLeftButtonUp += (_, _) => ReconnectRequested?.Invoke();
         QuitLink.MouseLeftButtonUp += (_, _) => QuitRequested?.Invoke();
         _messageTimer.Tick += (_, _) => { _messageTimer.Stop(); MessageText.Text = ""; };
@@ -152,6 +154,11 @@ public partial class FlyoutWindow : Window
                 BatteryText.SetResourceReference(TextBlock.ForegroundProperty, "SubBrush");
             }
 
+            AncBox.Visibility = s.HasAnc ? Visibility.Visible : Visibility.Collapsed;   // 沒有降噪的機種整塊隱藏，視窗高度隨內容縮小
+            PowerBox.Visibility = s.PowerSave is null ? Visibility.Collapsed : Visibility.Visible;   // 沒有省電模式的機種整塊隱藏
+            PowerStateText.Text = Strings.T("m.power_state", new { state = s.PowerSave == true ? Strings.T("m.on") : Strings.T("m.off") });
+            PowerSaveCheck.Visibility = s.PowerSave == false ? Visibility.Visible : Visibility.Hidden;   // 勾＝省電模式關＝防自動關機
+            PowerCheckRow.IsEnabled = PowerSaveRow.IsEnabled = s.Connected;
             bool canSet = s.Connected && s.AncSupported;
             // 冷卻期：裝置在兩次設定的間隔內會靜默忽略，連按只會卡住，所以暫停切換（目前模式仍標示）
             bool usable = canSet && !s.Cooling;
