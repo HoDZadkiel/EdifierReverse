@@ -288,6 +288,49 @@ public class DirectoryTests
         Assert.Single(saves);
     }
 
+    static readonly (string A2dp, string Name) XClip = ("6C:00:00:11:22:33", "EDIFIER X Clip");
+
+    [Fact] public void X_clip_advert_is_identified_by_its_search_uuid_and_uses_spp()
+    {
+        // 實機掃描 X Clip 的廣播（2026-11-11）：搜尋 UUID 不在 APK 1.0.31 產品表，由 scripts/extra_models.json 補進目錄
+        var m = Catalog.Identify(new[] { "00001a03-0000-1000-8000-00805f9b34fb" }, new Dictionary<ushort, byte[]>())!;
+        Assert.Equal(("X Clip", true), (m.Model, Catalog.UsesSpp(m.Model)));   // SDP 實測有 Edifier SPP UUID
+        Assert.Equal("48091a03-1a48-11e9-ab14-d663bd873d93", m.Service);       // GATT 實測
+    }
+
+    [Fact] public async Task Paired_x_clip_without_advert_gets_its_verified_session()
+    {
+        var (d, _) = Make(null, new List<(string, string)> { XClip });
+        await d.AddPairedAsync();
+        var dev = d.Devices.Single();
+        Assert.Equal(("X Clip", 2, 16), (dev.Model, dev.Version, dev.Encryption));   // 實機廣播 02 10；通用預設 (2, 0) 會讓指令無效
+    }
+
+    [Fact] public async Task Generic_entry_is_upgraded_once_the_catalog_knows_its_name()
+    {
+        // 目錄收錄 X Clip 之前存下的通用機種：要改成 X Clip 並換上實機驗證的 Session，不必使用者重掃
+        var s = new Settings();
+        s.Devices.Add(new KnownDevice { A2dp = XClip.A2dp, Ble = "6C:00:00:11:22:00", Version = 2, Encryption = 0, Name = XClip.Name, Model = "Edifier" });
+        var saves = new List<int>();
+        var d = new DeviceDirectory(s, _ => saves.Add(1), isPaired: _ => Task.FromResult(true),
+                                    pairedLister: () => Task.FromResult(new List<(string, string)> { XClip }));
+        Assert.True(await d.AddPairedAsync());
+        Assert.Equal(("X Clip", 2, 16), (s.Devices[0].Model, s.Devices[0].Version, s.Devices[0].Encryption));
+        Assert.False(await d.AddPairedAsync());   // 已更新過：不再變動
+        Assert.Single(saves);
+    }
+
+    [Fact] public async Task Upgrading_a_generic_entry_keeps_an_advertised_session_when_none_is_verified()
+    {
+        // 通用機種的 Session 可能來自廣播（準的）；沒有實機驗證值的機種只改機種名稱
+        var s = new Settings();
+        s.Devices.Add(new KnownDevice { A2dp = "AA:BB:B3:00:00:01", Version = 3, Encryption = 7, Name = "EDIFIER W820NB Plus海外", Model = "Edifier" });
+        var d = new DeviceDirectory(s, _ => { }, isPaired: _ => Task.FromResult(true),
+                                    pairedLister: () => Task.FromResult(new List<(string, string)> { ("AA:BB:B3:00:00:01", "EDIFIER W820NB Plus海外") }));
+        await d.AddPairedAsync();
+        Assert.Equal(("W820NB Plus海外", 3, 7), (s.Devices[0].Model, s.Devices[0].Version, s.Devices[0].Encryption));
+    }
+
     static Task<List<(string A2dp, string Name)>> NoPaired() => Task.FromResult(new List<(string A2dp, string Name)>());   // 不碰真實系統的已配對清單
 
     static DeviceDirectory TwoModels(string selected, HashSet<string> connected, List<string> bleCalls)

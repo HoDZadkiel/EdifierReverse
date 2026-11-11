@@ -40,7 +40,7 @@ EdifierReverse/
 ## 開發約定
 
 - Python 環境（選用：把 venv 放專案目錄外）：`$env:UV_PROJECT_ENVIRONMENT = "C:\Work\edifier-venv"` 後 `uv sync --extra tray`；C# 建置前設 `EDIFIER_BUILD_ROOT`（選用：把 bin/obj 放專案目錄外，專案在雲端同步資料夾時用）
-- `commands.py`、`d8_flags.py`、`catalog.json` 由 `scripts/gen_*.py` 產生，不手改
+- `commands.py`、`d8_flags.py`、`catalog.json` 由 `scripts/gen_*.py` 產生，不手改；官方產品表沒有、但已實機驗證的機種寫在 `scripts/extra_models.json`（`note` 欄寫驗證來源），由 `gen_catalog.py` 合併
 - **兩份協定實作要一致**：改封包、設定規則、字串、機種目錄時，Python 與 C# 都要改，並用同樣的測試向量守住
 - 字串一律走 `strings.json`（鍵名、四種語言、`{參數}` 都要齊，有測試檢查）；UI 文字不要寫死
 - 設定指令（ANC）一律經節流與冷卻（≥ 2 秒，實機測得裝置約 1.5 秒內會靜默忽略）；介面在冷卻期停用切換

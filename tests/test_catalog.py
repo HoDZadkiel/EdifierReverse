@@ -127,3 +127,32 @@ def test_volume_target_switches_endpoint_by_device_name():
     v.set_target("EDIFIER ES850NB")   # 同名不重找
     v.get()
     assert opened == ["EDIFIER", "EDIFIER ES850NB"]
+
+
+# 實機掃描 X Clip 的廣播（2026-11-11）：搜尋 UUID 不在 APK 1.0.31 產品表，由 scripts/extra_models.json 補進目錄
+XCLIP_UUID = "00001a03-0000-1000-8000-00805f9b34fb"
+
+
+def test_x_clip_advert_is_identified_by_its_search_uuid_and_uses_spp():
+    m = catalog.identify([XCLIP_UUID], REAL_MFR)
+    assert m.model == "X Clip" and m.spp   # SDP 實測有 Edifier SPP UUID
+    assert m.service == "48091a03-1a48-11e9-ab14-d663bd873d93"   # GATT 實測
+
+
+def test_extra_models_never_override_the_official_product_table():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent.parent / "scripts" / "gen_catalog.py"
+    spec = importlib.util.spec_from_file_location("gen_catalog", path)
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    official = [{"model": "X Clip 官方", "search": XCLIP_UUID, "service": "s", "spp": True, "type": 1, "tws": True,
+                 "published": True}]
+    extra = [{"model": "X Clip", "search": XCLIP_UUID, "service": "x", "spp": True, "type": None, "tws": True,
+              "published": True, "note": "實機"},
+             {"model": "Z", "search": "z", "service": "z", "spp": False, "type": None, "tws": False,
+              "published": True, "note": "實機"}]
+    merged = gen.merge_extra(official, extra)
+    assert [m["model"] for m in merged] == ["X Clip 官方", "Z"]   # 產品表收錄同一搜尋 UUID 時以產品表為準
+    assert "note" not in merged[1]   # 驗證來源只留在補充檔，不進目錄

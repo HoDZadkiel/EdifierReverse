@@ -75,7 +75,7 @@ cli.py 的 status / anc 子命令  ----^（同一個 DeviceService，不碰 GUI�
 | 協定與傳輸 | 沿用 `src/edifier_reverse`（Winsock SOCKADDR_BTH） | 移植成 C#（`Protocol/`、`Transport/`），同樣用 Winsock SOCKADDR_BTH，不依賴 WinRT 的 RFCOMM |
 | 位址探索 | bleak 掃描廣播，結果快取到 `%APPDATA%\edifier-reverse` | WinRT 廣播監聽，快取到 `%APPDATA%\EdifierTray` |
 | 音量 | pycaw | NAudio（兩者都調目前連線裝置的播放端點，例如「耳機 (EDIFIER ES850NB)」；找不到退回系統預設輸出） |
-| 測試 | 320 個 pytest（含協定、服務、面板、音量；2026-11-11 數字） | 156 個 xUnit（2026-11-11 數字；含選單內容、位置、開機啟動、視窗行為；協定向量與 Python 版相同，另含實機抓到的 `aa ec c1 00 02 b5 a7 b5` 逐位元組比對） |
+| 測試 | 325 個 pytest（含協定、服務、面板、音量；2026-11-11 數字） | 160 個 xUnit（2026-11-11 數字；含選單內容、位置、開機啟動、視窗行為；協定向量與 Python 版相同，另含實機抓到的 `aa ec c1 00 02 b5 a7 b5` 逐位元組比對） |
 | 執行需求 | Python 環境（uv）；尚未打包 | .NET 8 桌面執行環境（本機已有；他機需安裝）；單檔發佈 25 MB |
 
 **實測數字（這台電腦，ES850NB，2026-10-27）**
@@ -103,7 +103,7 @@ dotnet test tests/EdifierTray.Tests -c Release
 **外觀、語言、多裝置（2026-10-28，兩版皆有）**
 - **外觀**：右鍵選單的「日間／夜間／跟隨系統」，即時切換，存進設定檔。
 - **語言**：繁體中文、简体中文、English、日本語。第一次執行依 Windows 介面語言決定；字串表是兩版共用的 `src/edifier_reverse/strings.json`（C# 嵌入同一份檔案），有測試守住「四種語言鍵相同、`{參數}` 一致」。字體依語言挑 Windows 11 的介面字體（微軟正黑體 UI／微軟雅黑 UI／Yu Gothic UI，英數用 Segoe UI Variable），避免中文落到有襯線的細明體。
-- **裝置辨識**：依官方 App 的判定方式，從官方產品表產生機種目錄 `src/edifier_reverse/catalog.json`（`scripts/gen_catalog.py`，102 個機種）：廣播的 service UUID 含某機種的搜尋 UUID 就是該機種；廠商 ID `0x07E0` 的廣播即使機種不在目錄也算 Edifier 裝置（通用機種）。`edifier-reverse devices`／`EdifierTray --cli devices` 列出附近所有被辨識的裝置（實測：附近的 Sony 耳機等被正確忽略，只列出 ES850NB）。
+- **裝置辨識**：依官方 App 的判定方式，從官方產品表產生機種目錄 `src/edifier_reverse/catalog.json`（`scripts/gen_catalog.py`，102 個機種，另由手動維護的 `scripts/extra_models.json` 補上實機驗證過、產品表沒有的機種，目前是 X Clip）：廣播的 service UUID 含某機種的搜尋 UUID 就是該機種；廠商 ID `0x07E0` 的廣播即使機種不在目錄也算 Edifier 裝置（通用機種）。`edifier-reverse devices`／`EdifierTray --cli devices` 列出附近所有被辨識的裝置（實測：附近的 Sony 耳機等被正確忽略，只列出 ES850NB）。
 - **裝置選擇**：選單的「裝置」區列出已知裝置（連過的顯示裝置名稱，附位址後四碼區分同型號多台）與「重新掃描裝置」；選一台就重新連線，選擇存進設定檔。一次只連一台。音量調的是「名稱與目前連線裝置相符」的播放端點。
 - **其他機種**：只讀查詢（電量、名稱、版本、ANC）逐項容錯，機種不支援的項目不會被當成連線失敗；ANC 設定仍只開放實機驗證過的 group 16。**除 ES850NB、MP330（部分）外的機種都沒有實機驗證**。兩版都支援 SPP 與 BLE-only 機種（C# 版的 BLE 見第 7 節）。
 - 設定檔：Python 在 `%APPDATA%\edifier-reverse\settings.json`，C# 在 `%APPDATA%\EdifierTray\settings.json`（含裝置位址，不在專案目錄；兩版各自獨立）。

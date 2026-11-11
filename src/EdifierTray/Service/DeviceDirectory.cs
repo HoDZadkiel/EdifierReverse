@@ -40,8 +40,14 @@ public sealed class DeviceDirectory
 
     public static DeviceDirectory Load() => new();
 
-    /// <summary>沒有廣播就取不到 bleVersion／encryption，退回實機驗證過的值：ES850NB 是 (2, 16)，MP330 是 (2, 0)；其他機種沒驗證過，先用 (2, 0)。</summary>
-    public static Session FallbackSession(string model) => model == "ES850NB" ? new Session(2, 16) : new Session(2, 0);
+    /// <summary>實機驗證過的 Session：ES850NB 與 X Clip 是 (2, 16)，MP330 是 (2, 0)。</summary>
+    static readonly Dictionary<string, Session> VerifiedSession = new()
+    {
+        ["ES850NB"] = new Session(2, 16), ["MP330"] = new Session(2, 0), ["X Clip"] = new Session(2, 16),
+    };
+
+    /// <summary>沒有廣播就取不到 bleVersion／encryption，退回實機驗證過的值；其他機種沒驗證過，先用 (2, 0)。</summary>
+    public static Session FallbackSession(string model) => VerifiedSession.TryGetValue(model, out var s) ? s : new Session(2, 0);
 
     /// <summary>從經典藍牙位址推導 BLE 位址：第三個 byte 的低 4 bit 清零（實機：ES850NB、MP330 皆為 B3 → B0）。連線時會驗證 GATT service，推導錯了就連不上。</summary>
     public static string FallbackBleAddress(string a2dp)
@@ -101,15 +107,27 @@ public sealed class DeviceDirectory
         if (changed) _save(Settings);
     }
 
-    /// <summary>已用經典藍牙連著電腦的裝置不再廣播，掃描看不到。改用 Windows 的已配對清單補上：機種由名稱對應目錄，BLE 位址與 Session 用推導／實機驗證的預設值。</summary>
+    /// <summary>已用經典藍牙連著電腦的裝置不再廣播，掃描看不到。改用 Windows 的已配對清單補上：機種由名稱對應目錄，BLE 位址與 Session 用推導／實機驗證的預設值。
+    /// 已在清單、但當初被記成通用機種的，若名稱現在對得到目錄（目錄後來收錄了），就更新機種；有實機驗證的 Session 才一併更新
+    /// （通用機種的 Session 可能來自廣播，是準的）。回傳新增或更新的裝置。</summary>
     async Task<List<KnownDevice>> RememberPairedWithoutAdvertAsync(HashSet<string> advertised)
     {
         var added = new List<KnownDevice>();
         foreach (var (a2dp, name) in await _pairedLister())
         {
-            if (advertised.Contains(a2dp.ToUpperInvariant()) || Settings.Device(a2dp) is not null) continue;
+            if (advertised.Contains(a2dp.ToUpperInvariant())) continue;
             var model = name.StartsWith("EDIFIER ", StringComparison.OrdinalIgnoreCase) ? name[8..] : name;
             if (!Catalog.ByName.ContainsKey(model)) model = Catalog.GenericModel;
+            if (Settings.Device(a2dp) is { } old)
+            {
+                if (old.Model == Catalog.GenericModel && model != Catalog.GenericModel)
+                {
+                    old.Model = model;
+                    if (VerifiedSession.TryGetValue(model, out var verified)) (old.Version, old.Encryption) = (verified.Version, verified.Encryption);
+                    added.Add(old);
+                }
+                continue;
+            }
             var session = FallbackSession(model);
             var dev = new KnownDevice
             {
@@ -122,7 +140,8 @@ public sealed class DeviceDirectory
         return added;
     }
 
-    /// <summary>把 Windows 已配對、但清單裡還沒有的 Edifier 裝置加進來（不靠廣播）。回傳是否有新增。啟動時與每次連線前都呼叫，新配對的裝置才找得到。</summary>
+    /// <summary>把 Windows 已配對、但清單裡還沒有的 Edifier 裝置加進來（不靠廣播），並更新目錄後來收錄的通用機種。回傳是否有新增或更新。
+    /// 啟動時、每次連線前與托盤執行中定期呼叫，新配對的裝置才找得到。</summary>
     public async Task<bool> AddPairedAsync()
     {
         var added = await RememberPairedWithoutAdvertAsync(new HashSet<string>());

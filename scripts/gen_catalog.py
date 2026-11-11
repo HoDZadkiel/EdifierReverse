@@ -5,11 +5,24 @@
 傳輸規則：產品表有 ProductSPPUuid 就走 SPP，否則走 BLE GATT。
 
 這裡只保留判定與連線需要的事實（機種名稱、UUID、旗標），不含官方的文案、圖片與連結。
+產品表沒有、但已實機驗證的機種寫在 scripts/extra_models.json（手動維護，note 欄說明驗證來源），一併合併；
+產品表日後收錄同一個搜尋 UUID 時以產品表為準，略過補充項。
 用法：python scripts/gen_catalog.py <解密後的 products.json> [輸出路徑]
 """
 import json
 import sys
 from pathlib import Path
+
+EXTRA = Path(__file__).resolve().parent / "extra_models.json"
+FIELDS = ("model", "search", "service", "spp", "type", "tws", "published")
+
+
+def merge_extra(models: list, extra: list) -> list:
+    """把補充機種併進目錄；搜尋 UUID 或名稱已在產品表內的略過（以產品表為準）。"""
+    searches = {m["search"] for m in models}
+    names = {m["model"] for m in models}
+    added = [{k: e[k] for k in FIELDS} for e in extra if e["search"] not in searches and e["model"] not in names]
+    return sorted(models + added, key=lambda x: x["model"].lower())
 
 
 def build(items: list) -> list:
@@ -38,7 +51,8 @@ def build(items: list) -> list:
 if __name__ == "__main__":
     src = Path(sys.argv[1])
     dst = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(__file__).resolve().parent.parent / "src/edifier_reverse/catalog.json"
-    models = build(json.loads(src.read_text(encoding="utf-8")))
+    models = merge_extra(build(json.loads(src.read_text(encoding="utf-8"))),
+                         json.loads(EXTRA.read_text(encoding="utf-8")))
     # 一機種一行，好讀好比對
     dst.write_text("[\n" + ",\n".join(json.dumps(m, ensure_ascii=False) for m in models) + "\n]\n", encoding="utf-8")
     print(f"{len(models)} 個機種 -> {dst}")

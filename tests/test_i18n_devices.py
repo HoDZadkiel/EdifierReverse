@@ -338,3 +338,30 @@ def test_add_paired_adds_new_paired_devices_without_a_scan():
     d, saves = directory(paired_list=[MP])
     assert asyncio.run(d.add_paired()) is True and [x.model for x in d.devices] == ["MP330"]
     assert asyncio.run(d.add_paired()) is False   # 已在清單內：不重複、不再存檔
+
+
+XC = ("6C:00:00:11:22:33", "EDIFIER X Clip")
+
+
+def test_paired_x_clip_without_advert_gets_its_verified_session():
+    d, _ = directory(paired_list=[XC])
+    asyncio.run(d.add_paired())
+    dev = d.devices[0]
+    assert (dev.model, dev.version, dev.encryption) == ("X Clip", 2, 16)   # 實機廣播 02 10；通用預設 (2, 0) 會讓指令無效
+
+
+def test_a_generic_entry_is_upgraded_once_the_catalog_knows_its_name():
+    # 目錄收錄 X Clip 之前存下的通用機種：要改成 X Clip 並換上實機驗證的 Session，不必使用者重掃
+    s = S.Settings(devices=[S.KnownDevice(XC[0], "6C:00:00:11:22:00", 2, 0, name=XC[1], model="Edifier")])
+    d, saves = directory(settings=s, paired_list=[XC])
+    assert asyncio.run(d.add_paired()) is True and saves
+    assert (d.devices[0].model, d.devices[0].version, d.devices[0].encryption) == ("X Clip", 2, 16)
+    assert asyncio.run(d.add_paired()) is False   # 已更新過：不再變動
+
+
+def test_upgrading_a_generic_entry_keeps_an_advertised_session_when_none_is_verified():
+    # 通用機種的 Session 可能來自廣播（準的）；沒有實機驗證值的機種只改機種名稱
+    s = S.Settings(devices=[S.KnownDevice("AA:BB:B3:00:00:01", "", 3, 7, name="EDIFIER W820NB Plus海外", model="Edifier")])
+    d, _ = directory(settings=s, paired_list=[("AA:BB:B3:00:00:01", "EDIFIER W820NB Plus海外")])
+    asyncio.run(d.add_paired())
+    assert (d.devices[0].model, d.devices[0].version, d.devices[0].encryption) == ("W820NB Plus海外", 3, 7)

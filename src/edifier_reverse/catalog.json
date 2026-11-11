@@ -92,6 +92,7 @@
 {"model": "WH950NB", "search": "00009200-0000-1000-8000-00805f9b34fb", "service": "48099201-1a48-11e9-ab14-d663bd873d93", "spp": true, "type": 2, "tws": false, "published": true},
 {"model": "WH950NB 25版", "search": "00004601-0000-1000-8000-00805f9b34fb", "service": "48094601-1a48-11e9-ab14-d663bd873d93", "spp": true, "type": 2, "tws": false, "published": false},
 {"model": "WH950NB Pro", "search": "00008d03-0000-1000-8000-00805f9b34fb", "service": "48098d03-1a48-11e9-ab14-d663bd873d93", "spp": true, "type": 2, "tws": false, "published": false},
+{"model": "X Clip", "search": "00001a03-0000-1000-8000-00805f9b34fb", "service": "48091a03-1a48-11e9-ab14-d663bd873d93", "spp": true, "type": null, "tws": true, "published": true},
 {"model": "X1 Lite", "search": "00000501-0000-1000-8000-00805f9b34fb", "service": "48090501-1a48-11e9-ab14-d663bd873d93", "spp": true, "type": 1, "tws": true, "published": true},
 {"model": "X2 Plus海外", "search": "00004a01-0000-1000-8000-00805f9b34fb", "service": "48094a01-1a48-11e9-ab14-d663bd873d93", "spp": true, "type": 1, "tws": true, "published": true},
 {"model": "X2 Pro", "search": "00006703-0000-1000-8000-00805f9b34fb", "service": "48096703-1a48-11e9-ab14-d663bd873d93", "spp": true, "type": 1, "tws": true, "published": true},

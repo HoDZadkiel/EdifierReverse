@@ -4,7 +4,7 @@
 
 ## 一句話現況
 
-已從官方 App（ConneX 1.0.31）還原出 ES850NB 與 MP330 的藍牙連線方式、封包格式、指令碼與主要指令的 payload，並寫成有 320 個單元測試的 Python 函式庫與命令列工具（含 BLE 與 SPP 兩種傳輸層），以及有 156 個測試的 C#／WPF 托盤。**ES850NB 已完成實機驗證**（封包格式、SPP 與 BLE 連線、全部只讀查詢、ANC 五種模式、EQ 預設切換與自訂 EQ 寫入，見第 0 節）；**MP330 已部分實機驗證**（2026-10-31：BLE 連線、名稱／電量／EQ 查詢、省電模式 `0xB1`／`0xB2` 的讀取與設定，見第 0 節與 [protocol-commands.md](protocol-commands.md)），其餘結論仍是靜態分析（讀反編譯碼）。
+已從官方 App（ConneX 1.0.31）還原出 ES850NB 與 MP330 的藍牙連線方式、封包格式、指令碼與主要指令的 payload，並寫成有 325 個單元測試的 Python 函式庫與命令列工具（含 BLE 與 SPP 兩種傳輸層），以及有 160 個測試的 C#／WPF 托盤。**ES850NB 已完成實機驗證**（封包格式、SPP 與 BLE 連線、全部只讀查詢、ANC 五種模式、EQ 預設切換與自訂 EQ 寫入，見第 0 節）；**MP330 已部分實機驗證**（2026-10-31：BLE 連線、名稱／電量／EQ 查詢、省電模式 `0xB1`／`0xB2` 的讀取與設定，見第 0 節與 [protocol-commands.md](protocol-commands.md)），其餘結論仍是靜態分析（讀反編譯碼）。
 
 ## 可信度怎麼讀
 
@@ -55,6 +55,29 @@
 3. 傳輸：`ProductSPPUuid` 非空（64 筆，全是同一個 UUID）走 SPP，否則走 BLE GATT；GATT 的 Read／Write 特徵值 102 筆全部相同。
 
 本專案據此產生 `catalog.json`，並用「搜尋 UUID 命中」或「廠商 ID 命中」兩個條件辨識裝置（見 `catalog.py`、`Catalog.cs`）。有兩組機種名稱重複（`D32`、`W800BT Plus`，硬體版本不同、搜尋 UUID 不同），目錄裡加上 UUID 片段區分。實機驗證：附近一堆 BLE 裝置中只辨識出 ES850NB，且機種、位址、版本、加密設定與先前實測一致。
+
+## 0.2 X Clip（產品表外的新機種）實機唯讀探測（2026-11-11）
+
+X Clip 不在 APK 1.0.31 的產品表內。以下皆為實機觀察，只送了 `probe` 白名單內的查詢指令，沒有任何設定類指令。
+
+- **廣播**：local name `EDIFIER BLE`；搜尋 UUID `00001a03-…`（不在產品表）；廠商資料格式與其他機種相同（經典位址 6 bytes + `02 10`）→ Session (2, 16)。**連著電腦時仍會廣播**（MP330 連著時不廣播）。
+- **BLE 位址**：只有最後一個 byte 與經典位址不同，`fallback_ble_address`（第三個 byte 低 4 bit 清零）的推導規則不適用。
+- **SDP**：有 Edifier SPP UUID `EDF00000-EDFE-DFED-FEDF-EDFEDFEDFEDF`（服務名 "SPP"）；沒有 ES850NB 的 BES 專屬服務（BESOTA、WATCH）→ 推測非 BES 平台（未驗證）。
+- **SPP + Session (2, 16) 探測**：封包格式與 ES850NB 相同，12 個查詢中下列有回應：
+
+  | 指令 | 回應解析 |
+  |---|---|
+  | `0xD8` 功能旗標 | 27 bytes；`isTWS`、遊戲模式、觸控、提示音、健康提醒、翻譯、重設設定；`anc_value=0`；`eq_scheme=0x2E` |
+  | `0xD0` 電量 | 100 |
+  | `0xF2` 裝置狀態 | TWS，左右耳各 100 |
+  | `0xC6` 韌體 | 1.1.2 |
+  | `0xC8` MAC／`0xC9` 名稱 | 經典位址／`EDIFIER X Clip` |
+  | `0xD5` EQ | 預設 1 |
+
+  無回應：`0xCC` ANC（與 `anc_value=0` 一致，推測沒有降噪）、`0x43` 自訂 EQ、`0x48` LDAC、`0x37` LHDC、`0x91` HD 編碼。
+- **GATT**（同日，只列服務、不讀寫）：service `48091a03-1a48-11e9-ab14-d663bd873d93`，讀寫特徵值與其他機種相同（`48090001`／`48090002`）。
+- **納入目錄**：寫進 `scripts/extra_models.json`，由 `gen_catalog.py` 合併進 `catalog.json`；退回 Session 加上 X Clip 的 (2, 16)；當初被記成通用機種的已配對 X Clip 會自動改成 X Clip。
+- **未驗證**：任何設定類指令；BLE 位址的推導規則（目前只有一個樣本）。
 
 ## 1. 素材與工具
 
@@ -178,7 +201,7 @@ src/edifier_reverse/
   tray.py        托盤小工具（pystray 加面板），選用相依 tray
 （C# 版在 src/EdifierTray，見 tool-design.md 第 6 節）
 scripts/         解密產品表、產生常數表、抽取 ANC / D8 表
-tests/           320 個單元測試（C# 的 156 個在 tests/EdifierTray.Tests）（離線，不需藍牙）
+tests/           325 個單元測試（C# 的 160 個在 tests/EdifierTray.Tests）（離線，不需藍牙）
 ```
 
 測試品質：封包測試的向量是手算的位元組；對 `packet.py`、`reassembly.py`、`spp.py`、`ble.py`、`sim.py` 做過破壞性驗證（改常數、關檢查、顛倒順序），各次都有測試失敗。SPP 傳輸層用真的 socket（`socketpair`）對模擬裝置測過，但沒有碰過真正的藍牙。

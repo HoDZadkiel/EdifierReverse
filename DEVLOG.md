@@ -1018,8 +1018,45 @@
 - 建置 EdifierTray-Setup-1.0.14.exe（63.3 MB，%TEMP%\EdifierTray-installer），靜默安裝到 %LOCALAPPDATA%\EdifierTray（自動結束 1.0.13），手動啟動 1.0.14
 - 啟動後 settings.json 出現 X Clip（model `Edifier`、BLE 位址為推導值）；這是啟動時的補上流程加入的，執行中定期檢查只有單元測試驗證
 
+- commit f199255 推到 main（safe-push 六項通過；README 只提交測試數量兩行，使用者本機的排版改動保留未提交）；推 v1.0.14 標籤，release.yml 成功，Release 附 EdifierTray-Setup-1.0.14.exe 與 .sha256
+- GitHub Release v1.0.14：說明換成完整 changelog（修正、已知限制、測試、文件、安裝與 SHA-256），格式比照 1.0.13
+
 ### 待辦事項（TODO）
-- 未 commit、未推 v1.0.14 標籤
+- README 本機排版改動中 `on\\|off` 會讓表格切錯欄，提交前改回 `on\|off`
 - 執行中新配對的實機驗證：下次配對新裝置時確認 20 秒內出現在選單
 - X Clip 支援：需新版 APK 產品表或抓包確認協定，未經同意不對它送指令
 - 執行中取消配對的裝置仍只在啟動時清除（未改）
+
+### X Clip 協定初查（同日追加，唯讀，未對裝置送任何 Edifier 指令）
+- APK 1.0.31 產品表（103 筆，最新 2026-08-28，全為 Edifier ConneX）沒有 X Clip
+- Windows 快取的 SDP 紀錄：X Clip 有 A2DP、AVRCP、HFP、標準 SPP（1101），以及 Edifier SPP UUID `EDF00000-EDFE-DFED-FEDF-EDFEDFEDFEDF`（服務名 "SPP"）；ES850NB 同一 UUID 的服務名是 "TOTA"，另有 BESOTA 等 BES 專屬服務，X Clip 沒有 → 推測不是 BES 平台（未驗證）
+- 被動 BLE 掃描兩次都沒收到 X Clip 廣播（第二次時它與電腦斷線，可能是關機或在充電盒內），拿不到 Session 與機種搜尋 UUID
+
+#### 待辦事項（TODO）
+- X Clip 開機且不連電腦時再被動掃描，取得廣播的 manufacturer data（Session）與 service UUID（機種）
+- 取得收錄 X Clip 的新版 ConneX APK（下載需使用者同意）
+- 第三次被動掃描（X Clip 開機且連著電腦）收到廣播：local name "EDIFIER BLE"、search UUID `00001a03-…`、manufacturer data（0x07E0）= 經典位址 + `02 10` → Session (2, 16)，與 ES850NB 相同；連著電腦仍會廣播（與 ES850NB／MP330 不同）
+- `00001a03` 不在 APK 1.0.31 產品表（鄰近的 `1a01` 是 A6，JL 平台）
+- 實際 BLE 位址只有最後一個 byte 與經典位址不同，`fallback_ble_address` 的推導規則（第三 byte 低 4 bit 清零）不適用 X Clip；通用機種退回值 Session (2, 0) 也不對
+- GATT service 推測為 `48091a03-…`（依其他機種 search→service 的對應慣例），未驗證
+- 經使用者同意，以 `probe --transport spp --version 2 --encryption 16` 對 X Clip 送 12 個白名單查詢：封包格式相同；D8、電量、裝置狀態（TWS 左右 100）、韌體 1.1.2、MAC、名稱、EQ 有回應；ANC、自訂 EQ、LDAC、LHDC、HD 編碼無回應；紀錄在 docs/captures/（gitignore）；只讀，裝置狀態未改變
+- docs/findings.md：新增「0.2 X Clip 實機唯讀探測」
+
+#### 待辦事項（TODO）
+- 讓托盤正確支援產品表外的機種（例如 X Clip）：`catalog.json` 由 APK 產生、不可手改，需決定補充機種的機制；掃描到廣播時用廣播的 Session 與 BLE 位址覆寫推導值
+
+### X Clip 納入支援（同日追加）
+- 實機 GATT 服務列舉（只列服務、不讀寫）：service `48091a03-…`，讀寫特徵值同其他機種
+- 新增 scripts/extra_models.json（手動維護，只收實機驗證過、產品表沒有的機種，`note` 寫來源）；scripts/gen_catalog.py 新增 `merge_extra`，產品表有同一搜尋 UUID 或名稱時以產品表為準；重新產生 catalog.json（只多 X Clip 一行）
+- devices.py／DeviceDirectory.cs：退回 Session 加 X Clip (2, 16)；已在清單的通用機種，名稱對得到目錄時改成該機種，有實機驗證的 Session 才一併更新（C# 改用 `VerifiedSession` 字典）
+- 測試：Python +5（共 325）、C# +4（共 160），全過
+- README、CLAUDE.md、docs/findings.md（0.2 節）、docs/tool-design.md：機種目錄補充機制與測試數量
+
+- pyproject.toml、uv.lock：1.0.14 → 1.0.15；建置 EdifierTray-Setup-1.0.15.exe（63.3 MB）並靜默安裝、啟動
+- 實機驗證：已安裝的 C# 托盤啟動後把 settings.json 裡的 X Clip 從 Edifier (2, 0) 改成 X Clip (2, 16)；`--cli devices` 以廣播辨識出 X Clip、傳輸 SPP
+- 實機驗證（Python 函式庫，暫存設定、不存檔）：從通用機種紀錄出發，經 add_paired 更新後以 SPP 連上，讀到名稱、韌體 1.1.2、電量 100，`has_anc=False`（面板會隱藏降噪）
+
+#### 待辦事項（TODO）
+- C# 托盤實際連 X Clip 未驗證（托盤選用的是 MP330，未更動使用者選擇）
+- X Clip 已存的 BLE 位址仍是錯誤的推導值，重新掃描才會更新；SPP 是主要路徑，暫不影響
+- 未 commit

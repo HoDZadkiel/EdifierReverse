@@ -14,9 +14,9 @@ from .service import Connector
 from .transport import Transport
 
 
-# 沒有廣播就取不到 bleVersion／encryption，退回實機驗證過的值：ES850NB 是 (2, 16)，MP330 是 (2, 0)。
+# 沒有廣播就取不到 bleVersion／encryption，退回實機驗證過的值：ES850NB 與 X Clip 是 (2, 16)，MP330 是 (2, 0)。
 # 其他機種沒驗證過，先用 (2, 0)。
-FALLBACK_SESSION = {"ES850NB": Session(2, 16), "MP330": Session(2, 0)}
+FALLBACK_SESSION = {"ES850NB": Session(2, 16), "MP330": Session(2, 0), "X Clip": Session(2, 16)}
 
 
 def fallback_ble_address(a2dp: str) -> str:
@@ -102,17 +102,27 @@ class DeviceDirectory:
 
     async def _remember_paired_without_advert(self, advertised: set) -> List[S.KnownDevice]:
         """已用經典藍牙連著電腦的裝置不再廣播，掃描看不到。改用 Windows 的已配對清單補上，
-        機種由名稱對應目錄；BLE 位址與 Session 用推導／實機驗證的預設值。"""
+        機種由名稱對應目錄；BLE 位址與 Session 用推導／實機驗證的預設值。
+        已在清單、但當初被記成通用機種的，若名稱現在對得到目錄（目錄後來收錄了），就更新機種；
+        有實機驗證的 Session 才一併更新（通用機種的 Session 可能來自廣播，是準的）。回傳新增或更新的裝置。"""
         if self._paired_lister is None:
             from .pairing import paired_edifier_devices
 
             self._paired_lister = paired_edifier_devices
         added = []
         for a2dp, name in await self._paired_lister():
-            if a2dp.upper() in advertised or self.settings.device(a2dp) is not None:
+            if a2dp.upper() in advertised:
                 continue
             model = name[8:] if name.upper().startswith("EDIFIER ") else name
             model = model if model in catalog.BY_NAME else catalog.GENERIC_MODEL
+            old = self.settings.device(a2dp)
+            if old is not None:
+                if old.model == catalog.GENERIC_MODEL and model != catalog.GENERIC_MODEL:
+                    old.model = model
+                    if model in FALLBACK_SESSION:
+                        old.version, old.encryption = FALLBACK_SESSION[model].version, FALLBACK_SESSION[model].encryption
+                    added.append(old)
+                continue
             session = FALLBACK_SESSION.get(model, Session(2, 0))
             dev = S.KnownDevice(a2dp.upper(), fallback_ble_address(a2dp), session.version, session.encryption,
                                 name=name, model=model)
@@ -121,7 +131,8 @@ class DeviceDirectory:
         return added
 
     async def add_paired(self) -> bool:
-        """把 Windows 已配對、但清單裡還沒有的 Edifier 裝置加進來（不靠廣播）。啟動時與每次連線前都呼叫，新配對的裝置才找得到。"""
+        """把 Windows 已配對、但清單裡還沒有的 Edifier 裝置加進來（不靠廣播），並更新目錄後來收錄的通用機種。
+        啟動時、每次連線前與托盤執行中定期呼叫，新配對的裝置才找得到。回傳是否有新增或更新。"""
         added = await self._remember_paired_without_advert(set())
         if added:
             self._save(self.settings)
