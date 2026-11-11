@@ -345,3 +345,27 @@ def test_apply_state_shows_osd_for_low_battery_and_mode_changes():
     app._apply_state(connected(battery=50, mode=1))
     app._apply_state(connected(battery=19, mode=3))
     assert app.osd.shown == ["電量偏低：19%", "降噪：防風噪"]
+
+
+def test_a_device_paired_while_the_tray_runs_is_added_and_watched():
+    # 托盤開著時才在 Windows 配對的裝置：定期檢查要把它補進清單並重設連線監看，不必重開托盤
+    import asyncio
+
+    from edifier_reverse import settings as S
+    from edifier_reverse.devices import DeviceDirectory
+
+    paired = []
+
+    async def lister():
+        return list(paired)
+
+    async def is_paired(a2dp):
+        return True
+
+    d = DeviceDirectory("ES850NB", S.Settings(), save=lambda s: None, is_paired=is_paired, paired_lister=lister)
+    app = TrayApp(None, VolumeControl("X", opener=lambda n: None), headless=True, directory=d, settings=S.Settings())
+    assert asyncio.run(app._add_newly_paired()) is False and app._tasks.empty()   # 沒有新配對：不重設監看
+    paired.append(("AA:BB:B3:11:22:33", "EDIFIER MP330"))
+    assert asyncio.run(app._add_newly_paired()) is True
+    assert [x.model for x in d.devices] == ["MP330"]
+    assert app._tasks.get_nowait() == app._watch_current   # 新裝置要納入監看，連上電腦才會切過去

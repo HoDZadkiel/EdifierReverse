@@ -86,8 +86,8 @@ C# 版對應：`EdifierTray.exe --cli devices|status|anc N [強度]`。
 ### 測試
 
 ```powershell
-uv run pytest                                        # Python：319 個，全部離線，不需要藍牙
-dotnet test tests/EdifierTray.Tests -c Release       # C#：155 個（不設 EDIFIER_BUILD_ROOT；設了且專案內有殘留 obj 時會重複定義而失敗）
+uv run pytest                                        # Python：320 個，全部離線，不需要藍牙
+dotnet test tests/EdifierTray.Tests -c Release       # C#：156 個（不設 EDIFIER_BUILD_ROOT；設了且專案內有殘留 obj 時會重複定義而失敗）
 ```
 
 ## 運作方式

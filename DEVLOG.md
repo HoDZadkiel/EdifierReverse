@@ -999,3 +999,27 @@
 - 測試：Python 319、C# 155 全過；跑 C# 測試前再次清掉 tests/EdifierTray.Tests 的專案內 obj／bin（又撞到 CS0579）
 - 建置 EdifierTray-Setup-1.0.13.exe（63.3 MB），關閉測試版、靜默安裝到 %LOCALAPPDATA%\EdifierTray 並啟動；登入時啟動指向 1.0.13
 - 靜默安裝不會自動啟動托盤，要手動啟動
+- GitHub Release v1.0.13：說明換成完整 changelog（改善、已知限制、測試、文件、安裝與 SHA-256）；安裝段原寫「先手動結束舊版」，對照 EdifierTray.iss（CloseApplications=force）改為自動結束
+
+## 2026-11-11
+
+### 修改內容（Changes）
+- src/EdifierTray/TrayHost.cs：新增 20 秒計時器，在 UI 執行緒呼叫 `AddPairedAsync()`，有新增就重設連線監看（`AddNewlyPairedAsync`，避免重疊執行）
+- src/edifier_reverse/tray.py：同樣行為（`_add_newly_paired`／`_poll_paired`，`PAIRED_POLL_SECONDS = 20`）
+- tests：Python `test_a_device_paired_while_the_tray_runs_is_added_and_watched`、C# `Device_paired_after_startup_is_added_by_a_later_check`
+- README、docs/findings.md、docs/tool-design.md：測試數量更新為 Python 320、C# 156
+
+### 問題與解法（Problems & Solutions）
+- 托盤執行中新配對的 EDIFIER X Clip 沒出現：已配對清單只在啟動與連線前讀取，監看只看清單內位址，連線健康時不重連 → 改為執行中定期補上
+- X Clip 不在 catalog.json（APK 1.0.31 產品表沒有），會被當成通用機種，只試 SPP、Session 用未驗證的 (2, 0)、推導出的 BLE 位址很可能不對
+
+### 1.0.14 安裝（同日追加）
+- pyproject.toml、uv.lock：1.0.13 → 1.0.14（`uv lock --check` 通過；PowerShell 5.1 的 Set-Content 會加 BOM，已移除）
+- 建置 EdifierTray-Setup-1.0.14.exe（63.3 MB，%TEMP%\EdifierTray-installer），靜默安裝到 %LOCALAPPDATA%\EdifierTray（自動結束 1.0.13），手動啟動 1.0.14
+- 啟動後 settings.json 出現 X Clip（model `Edifier`、BLE 位址為推導值）；這是啟動時的補上流程加入的，執行中定期檢查只有單元測試驗證
+
+### 待辦事項（TODO）
+- 未 commit、未推 v1.0.14 標籤
+- 執行中新配對的實機驗證：下次配對新裝置時確認 20 秒內出現在選單
+- X Clip 支援：需新版 APK 產品表或抓包確認協定，未經同意不對它送指令
+- 執行中取消配對的裝置仍只在啟動時清除（未改）

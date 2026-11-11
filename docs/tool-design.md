@@ -75,7 +75,7 @@ cli.py 的 status / anc 子命令  ----^（同一個 DeviceService，不碰 GUI�
 | 協定與傳輸 | 沿用 `src/edifier_reverse`（Winsock SOCKADDR_BTH） | 移植成 C#（`Protocol/`、`Transport/`），同樣用 Winsock SOCKADDR_BTH，不依賴 WinRT 的 RFCOMM |
 | 位址探索 | bleak 掃描廣播，結果快取到 `%APPDATA%\edifier-reverse` | WinRT 廣播監聽，快取到 `%APPDATA%\EdifierTray` |
 | 音量 | pycaw | NAudio（兩者都調目前連線裝置的播放端點，例如「耳機 (EDIFIER ES850NB)」；找不到退回系統預設輸出） |
-| 測試 | 319 個 pytest（含協定、服務、面板、音量；2026-11-01 數字） | 155 個 xUnit（2026-11-01 數字；含選單內容、位置、開機啟動、視窗行為；協定向量與 Python 版相同，另含實機抓到的 `aa ec c1 00 02 b5 a7 b5` 逐位元組比對） |
+| 測試 | 320 個 pytest（含協定、服務、面板、音量；2026-11-11 數字） | 156 個 xUnit（2026-11-11 數字；含選單內容、位置、開機啟動、視窗行為；協定向量與 Python 版相同，另含實機抓到的 `aa ec c1 00 02 b5 a7 b5` 逐位元組比對） |
 | 執行需求 | Python 環境（uv）；尚未打包 | .NET 8 桌面執行環境（本機已有；他機需安裝）；單檔發佈 25 MB |
 
 **實測數字（這台電腦，ES850NB，2026-10-27）**

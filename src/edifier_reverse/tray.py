@@ -25,6 +25,7 @@ from .service import AMBIENT_MODE, DeviceService, DeviceState, ServiceError
 from .volume import VolumeControl, VolumeError
 
 MODEL_GROUP = 16  # 只有 group 16 的模式表經實機驗證
+PAIRED_POLL_SECONDS = 20  # 執行中多久檢查一次 Windows 有沒有新配對的 Edifier 裝置（與 C# 版一致）
 
 
 def tooltip_text(state: DeviceState, fallback_name: str = "Edifier") -> str:
@@ -184,6 +185,22 @@ class TrayApp:
         except Exception:
             pass
         self.post(self._watch_current)
+
+    async def _add_newly_paired(self) -> bool:
+        """托盤開著時才配對的裝置：連線監看只看清單裡的位址、連線健康時也不會重連，
+        所以要定期補進清單並重設監看，否則要重開托盤才找得到（與 C# 版一致）。回傳是否有新增。"""
+        try:
+            added = await self.directory.add_paired()
+        except Exception:
+            return False
+        if added:
+            self.post(self._watch_current)
+        return added
+
+    async def _poll_paired(self) -> None:
+        while True:
+            await asyncio.sleep(PAIRED_POLL_SECONDS)
+            await self._add_newly_paired()
 
     @property
     def fallback_name(self) -> str:
@@ -398,6 +415,7 @@ class TrayApp:
         self._start_hotkeys()
         if self.directory is not None:
             self.runner.submit(self._prune_and_watch())
+            self.runner.submit(self._poll_paired())
         self.refresh_volume()
         self._render()
         self.icon.run_detached()

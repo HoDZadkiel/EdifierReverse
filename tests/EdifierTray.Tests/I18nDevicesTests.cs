@@ -273,6 +273,21 @@ public class DirectoryTests
         Assert.NotEmpty(saves);
     }
 
+    [Fact] public async Task Device_paired_after_startup_is_added_by_a_later_check()
+    {
+        // 托盤執行中定期呼叫 AddPairedAsync：啟動後才配對的裝置要在下一次檢查補進來，已在清單的不重複新增
+        var paired = new List<(string A2dp, string Name)>();
+        var saves = new List<int>();
+        var d = new DeviceDirectory(new Settings(), _ => saves.Add(1), isPaired: _ => Task.FromResult(true),
+                                    pairedLister: () => Task.FromResult(paired.ToList()));
+        Assert.False(await d.AddPairedAsync());
+        paired.Add(("AA:BB:B3:11:22:33", "EDIFIER MP330"));
+        Assert.True(await d.AddPairedAsync());
+        Assert.Equal(new[] { "MP330" }, d.Devices.Select(x => x.Model));
+        Assert.False(await d.AddPairedAsync());
+        Assert.Single(saves);
+    }
+
     static Task<List<(string A2dp, string Name)>> NoPaired() => Task.FromResult(new List<(string A2dp, string Name)>());   // 不碰真實系統的已配對清單
 
     static DeviceDirectory TwoModels(string selected, HashSet<string> connected, List<string> bleCalls)

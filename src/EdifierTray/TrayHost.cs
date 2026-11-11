@@ -20,11 +20,11 @@ public sealed class TrayHost : IDisposable
     readonly ConnectionWatcher _watcher = new();
     readonly KeepAwake _keepAwake = new();
     readonly AudioOutputs.Cache _outputs = new();   // 右鍵選單用快取，不在 UI 執行緒列舉端點
-    System.Threading.Timer? _keepAwakeTimer;
+    System.Threading.Timer? _keepAwakeTimer, _pairedTimer;
     readonly OsdTracker _tracker = new();
     HotkeyListener? _hotkeys;
     int? _volume;
-    bool _muted, _wasConnected, _scanning;
+    bool _muted, _wasConnected, _scanning, _checkingPaired;
     string _volumeTarget = "";
 
     /// <param name="withTray">false 時不建立托盤圖示（自動化驗證用）。</param>
@@ -75,7 +75,23 @@ public sealed class TrayHost : IDisposable
             _watcher.Connected += Service.NotifyDeviceAvailable;
             _ = PruneAndWatchAsync();
             _keepAwakeTimer = new System.Threading.Timer(_ => ReconcileKeepAwake(), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(20));   // 裝置連上／斷線時端點會出現／消失，定期對齊
+            _pairedTimer = new System.Threading.Timer(_ => System.Windows.Application.Current?.Dispatcher.InvokeAsync(AddNewlyPairedAsync),
+                                                      null, PairedPollInterval, PairedPollInterval);
         }
+    }
+
+    /// <summary>執行中多久檢查一次 Windows 有沒有新配對的 Edifier 裝置。</summary>
+    static readonly TimeSpan PairedPollInterval = TimeSpan.FromSeconds(20);
+
+    /// <summary>托盤開著時才配對的裝置：連線監看只看清單裡的位址、連線健康時也不會重連，
+    /// 所以要定期補進清單並重設監看，否則要重開托盤才找得到。在 UI 執行緒執行，與選單讀清單不衝突。</summary>
+    async Task AddNewlyPairedAsync()
+    {
+        if (Directory is null || _checkingPaired) return;
+        _checkingPaired = true;
+        try { if (await Directory.AddPairedAsync()) WatchDevices(); }
+        catch (Exception) { }
+        finally { _checkingPaired = false; }
     }
 
     /// <summary>啟動時清掉已不再配對的裝置，再開始監看；失敗不影響其他功能。</summary>
@@ -357,6 +373,7 @@ public sealed class TrayHost : IDisposable
     {
         _watcher.Dispose();
         _keepAwakeTimer?.Dispose();
+        _pairedTimer?.Dispose();
         _keepAwake.Dispose();
         _outputs.Dispose();
         _hotkeys?.Dispose();
